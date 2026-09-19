@@ -6,7 +6,8 @@ services:
     image: jianshen:latest
     container_name: jianshen
     restart: unless-stopped
-    user: "1000:1000"
+    # 这里故意不写 user: —— 容器以 root 启动, app.py 会把数据目录交给 1000 后自己降权。
+    # 否则新 clone 的人没有 data/ 目录, docker 用 root 建它, 非 root 进程写不了数据库。
     ports:
       - "8091:8091"
     volumes:

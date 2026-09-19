@@ -1900,7 +1900,35 @@ btn.onclick=go;inp.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
 """
 
 
+def _prep_data_dir():
+    """容器里通常以 root 启动: 把数据目录交给运行用户, 然后降权。
+
+    新 clone 的人没有 data/ 目录, docker 会用 root 建它, 非 root 进程就写不了数据库。
+    这里自动把属主改过来再降权, 省掉手动 mkdir/chown 那一步。
+    """
+    if os.getuid() != 0:
+        return
+    uid = int(os.environ.get("RUN_UID", "1000"))
+    gid = int(os.environ.get("RUN_GID", "1000"))
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        os.chown(DATA_DIR, uid, gid)
+        for f in os.listdir(DATA_DIR):
+            try:
+                os.chown(os.path.join(DATA_DIR, f), uid, gid)
+            except OSError:
+                pass
+    except OSError:
+        pass
+    try:
+        os.setgid(gid)
+        os.setuid(uid)
+    except OSError:
+        pass
+
+
 def main():
+    _prep_data_dir()
     db()
     print(f"健身记录启动: http://0.0.0.0:{PORT}  数据: {DB_PATH}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
