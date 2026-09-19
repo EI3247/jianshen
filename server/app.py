@@ -28,8 +28,9 @@ COOKIE_NAME = "js_auth"
 COOKIE_MAX_AGE = 90 * 24 * 3600
 SALT = "jianshen-v1"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INDEX_PATH = os.path.join(BASE_DIR, "index.html")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # 项目根(server/ 的上一层)
+WEB_DIR = os.path.join(BASE_DIR, "web")                                  # 前端静态文件目录
+INDEX_PATH = os.path.join(WEB_DIR, "index.html")
 
 DB_LOCK = threading.Lock()
 _db = None
@@ -857,7 +858,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/icon-192.png", "/icon-512.png", "/apple-touch-icon.png", "/favicon.ico"):
             fn = "icon-512.png" if path == "/icon-512.png" else "icon-192.png"
             try:
-                with open(os.path.join(BASE_DIR, fn), "rb") as f:
+                with open(os.path.join(WEB_DIR, fn), "rb") as f:
                     self._send(200, f.read(), "image/png")
             except OSError:
                 self._err("图标缺失", 404)

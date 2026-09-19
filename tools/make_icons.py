@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """生成 PWA 图标: 圆角蓝底 + 白色哑铃"""
+import os
 from PIL import Image, ImageDraw
+
+OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
 
 
 def icon(S):
@@ -24,6 +27,7 @@ def icon(S):
     return im.resize((S, S), Image.LANCZOS)
 
 
+os.makedirs(OUT_DIR, exist_ok=True)
 for s in (192, 512):
-    icon(s).save(f"/vol1/1000/docker/jianshen/icon-{s}.png")
-    print("wrote", f"icon-{s}.png")
+    icon(s).save(os.path.join(OUT_DIR, f"icon-{s}.png"))
+    print("wrote", f"web/icon-{s}.png")

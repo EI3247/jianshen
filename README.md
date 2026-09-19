@@ -49,6 +49,26 @@
 
 ---
 
+## 目录结构
+
+```
+jianshen/
+├── server/
+│   └── app.py              后端(单文件, 只用 Python 标准库)
+├── web/                    前端(单文件 HTML + 原生 JS, 没有构建步骤)
+│   ├── index.html
+│   ├── icon-192.png
+│   └── icon-512.png
+├── tools/
+│   └── make_icons.py       重新生成上面两个图标(需要 Pillow)
+├── Dockerfile
+├── docker-compose.yml
+├── data/                   SQLite 数据库(运行时自动创建, 已 gitignore)
+└── backup/                 你放备份的地方(已 gitignore)
+```
+
+---
+
 ## 快速开始
 
 ```bash
