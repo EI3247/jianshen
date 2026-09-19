@@ -1636,6 +1636,30 @@ class Handler(BaseHTTPRequestHandler):
             q("DELETE FROM exercises WHERE id=?", (eid,), commit=True)
             self._ok()
             return
+        if path == "/api/exercise/move":
+            # 同一天内的部位上下调序：按 ord 归一化重排
+            eid = d.get("id")
+            dirn = str(d.get("dir", "")).strip()
+            cur = q("SELECT * FROM exercises WHERE id=?", (eid,), one=True)
+            if not cur:
+                self._err("没找到这个部位")
+                return
+            rows = q("SELECT id FROM exercises WHERE member_id=? AND date=? ORDER BY ord,id",
+                     (cur["member_id"], cur["date"]))
+            ids = [r["id"] for r in rows]
+            if eid not in ids:
+                self._err("没找到这个部位")
+                return
+            i = ids.index(eid)
+            j = i - 1 if dirn == "up" else i + 1
+            if 0 <= j < len(ids):
+                ids[i], ids[j] = ids[j], ids[i]
+                with DB_LOCK:
+                    for k, x in enumerate(ids):
+                        db().execute("UPDATE exercises SET ord=? WHERE id=?", (k, x))
+                    db().commit()
+            self._ok()
+            return
         if path == "/api/act/delete":
             eid, nm0 = d.get("exercise_id"), str(d.get("name", "") or "")
             q("DELETE FROM sets WHERE exercise_id=? AND COALESCE(name,'')=?", (eid, nm0), commit=True)

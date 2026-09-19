@@ -149,8 +149,12 @@
   .ex{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:#fbfcfe}
   .actblk{background:#fff;border:1px solid var(--line);border-radius:11px;padding:8px 9px;margin-top:7px}
   .actblk .abh{display:flex;gap:6px;align-items:center}
-  .actblk .anm{flex:1;min-width:0;font-weight:700;font-size:15px;border:0;background:none;padding:2px 0;border-radius:6px}
-  .actblk .anm:focus{background:#f1f6ff}
+  .actblk .anm{flex:1;min-width:0;font-weight:700;font-size:15px;border:0;background:none;padding:2px 0;border-radius:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .actblk .anm.edit{border:1px solid #c7d3e6;background:#fff;padding:2px 6px}
+  .actblk .abtn{flex:none;border:1px solid var(--line);background:#fff;color:#4a6fa8;border-radius:8px;
+    font-size:12px;font-weight:600;padding:3px 9px;cursor:pointer}
+  .actblk .abtn:active{background:#eef2f8}
   .actblk .lasthint{font-size:12px;margin:2px 0 5px}
   .actblk .arow{display:flex;gap:6px;margin-top:7px}
   .mini{flex:1;border:1px dashed #c7d3e6;background:#fafcff;color:#4a6fa8;border-radius:9px;
@@ -170,6 +174,7 @@
   table{width:100%;border-collapse:collapse;font-size:14px}
   th{color:var(--mut);font-weight:400;font-size:12px;text-align:left;padding:4px 4px}
   td{padding:5px 4px;border-top:1px solid var(--line)}
+  .actblk table td{border-top:0;padding:6px 4px}
   td input{width:100%;padding:9px 6px;text-align:center}
   .setrow td:first-child{color:var(--mut);white-space:nowrap;font-size:13px}
   /* 热量收支 */
@@ -279,7 +284,11 @@
   .btable td .dl{font-size:12px;font-weight:700}
   .btable td .dl.up{color:var(--red)} .btable td .dl.dn{color:var(--green)}
   canvas{width:100%;height:200px;background:#fbfcfe;border:1px solid var(--line);border-radius:12px}
-  .wkrow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);padding:3px 0}
+  .wkrow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);padding:3px 0;
+    cursor:pointer;border-radius:8px}
+  .wkrow.on{background:#eef4ff}
+  .wkrow.on .wkd,.wkrow.on .wkv{color:#17202e;font-weight:700}
+  .wkrow.on .wkb i{background:#1d4ed8}
   .wkd{width:44px;flex:none}
   .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
   .seg button{border:0;background:#fff;color:var(--mut);padding:7px 14px;font-size:13px;
@@ -627,10 +636,12 @@ async function loadDetail(){
       e.sets.forEach(s=>{let k=s.name||'';if(!gm[k]){gm[k]=[];names.push(k);}gm[k].push(s);});
       let blocks=names.map(nm=>{
         let g=gm[nm];
+        let nmTxt=nm?esc(nm):'<span class="mut">未命名</span>';
         if(g.some(s=>s.mins!=null)){                 // 有氧项目
-          return g.map(s=>`<div class="actblk crd">
+          return g.map(s=>`<div class="actblk crd" data-eid="${e.id}">
             <div class="abh">
-              <input class="anm" type="text" value="${esc(nm)}" data-old="${esc(nm)}" placeholder="项目，如 跑步机" onchange="renameAct(${e.id},this)">
+              <div class="anm" data-old="${esc(nm)}" title="${esc(nm)}">${nmTxt}</div>
+              <button class="abtn" onclick="editActName(this)">改名</button>
               <button class="xbtn" onclick="delAct(${e.id},this)" title="删掉这个项目">✕</button></div>
             <div class="arow" style="align-items:center">
               <span class="mut" style="font-size:12px">时长</span>
@@ -648,9 +659,10 @@ async function loadDetail(){
         let lk=(e.last_by_act||{})[nm];
         let lastTxt=(lk&&lk.sets&&lk.sets.length)
           ?`上次 ${lk.date.slice(5)}：`+lk.sets.map(x=>(x.weight==null?'-':x.weight)+'×'+(x.reps==null?'-':x.reps)).join(' / '):'';
-        return `<div class="actblk">
+        return `<div class="actblk" data-eid="${e.id}">
           <div class="abh">
-            <input class="anm" type="text" value="${esc(nm)}" data-old="${esc(nm)}" placeholder="动作，如 卧推" onchange="renameAct(${e.id},this)">
+            <div class="anm" data-old="${esc(nm)}" title="${esc(nm)}">${nmTxt}</div>
+            <button class="abtn" onclick="editActName(this)">改名</button>
             <button class="xbtn" onclick="delAct(${e.id},this)" title="删掉这个动作">✕</button></div>
           ${lastTxt?`<div class="mut lasthint">${esc(lastTxt)}</div>`:''}
           <table><tr><th>组</th><th>重量kg</th><th>次数</th><th></th></tr>${rows}</table>
@@ -660,11 +672,13 @@ async function loadDetail(){
       }).join('')||'<div class="mut" style="margin-top:7px">还没有动作，在下面加一个</div>';
       h+=`<div class="ex"><div class="t"><b>${esc(e.name)}</b>
         ${e.reps_target?`<span class="tag" style="background:#eef7f0;color:#2f8b48">目标 ${esc(e.reps_target)} 次</span>`:''}
-        <span class="mut">容量 ${Math.round(vol)}kg</span>
-        <button class="btn r sm" onclick="delEx(${e.id})">删部位</button></div>
+        ${vol>0?`<span class="mut">容量 ${Math.round(vol)}kg</span>`:''}
+        <button class="xbtn" onclick="moveEx(${e.id},-1)" title="上移">↑</button>
+        <button class="xbtn" onclick="moveEx(${e.id},1)" title="下移">↓</button>
+        <button class="xbtn" onclick="delEx(${e.id})" title="删掉这个部位">✕</button></div>
         ${blocks}
         <div class="row" style="margin-top:9px">
-        <input type="text" class="newact" placeholder="动作，如 卧推" style="flex:1;min-width:110px">
+        <input type="text" class="newact" placeholder="锻炼动作" style="flex:1;min-width:110px">
         <button class="btn g sm" onclick="addAct(${e.id},this)">＋动作</button></div></div>`;
     }
   }
@@ -811,9 +825,41 @@ async function addCardio(){
 }
 async function renameEx(id,old){let n=prompt('部位改名：',old);if(!n||!n.trim())return;await api('/api/exercise/rename',{},{id,name:n.trim()});loadMembers();loadCal();}
 async function delEx(id){if(!confirm('删掉这个部位及所有组？'))return;await api('/api/exercise/delete',{},{id});loadCal();}
+async function moveEx(id,d){await api('/api/exercise/move',{},{id,dir:d<0?'up':'down'});loadCal();}
 async function delSet(id){await api('/api/set/delete',{},{id});loadCal();}
 // --- 部位下的「动作块」 ---
-function actNameOf(btn){let b=btn.closest('.actblk');return b?b.querySelector('.anm').value.trim():'';}
+function actNameOf(btn){
+  let b=btn.closest('.actblk');if(!b)return '';
+  let n=b.querySelector('.anm');if(!n)return '';
+  return (n.tagName==='INPUT'?n.value:(n.dataset.old||n.textContent||'')).trim();
+}
+// 点「改名」才把名字变输入框（原来点名字直接可改，容易误触）
+function editActName(btn){
+  let blk=btn.closest('.actblk'),nmEl=blk.querySelector('.anm');
+  if(nmEl.tagName==='INPUT'){nmEl.focus();nmEl.select();return;}
+  let old=nmEl.dataset.old||'';
+  let inp=document.createElement('input');
+  inp.type='text';inp.className='anm edit';inp.value=old;inp.dataset.old=old;inp.placeholder='动作名';
+  inp._nmEl=nmEl; inp._blk=blk;
+  inp.onkeydown=ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();commitRename(inp);}
+    else if(ev.key==='Escape'){ev.preventDefault();inp.dataset.esc='1';commitRename(inp);}
+  };
+  inp.onblur=()=>commitRename(inp);
+  nmEl.parentNode.replaceChild(inp,nmEl);
+  inp.focus();inp.select();
+}
+// 提交/取消改名；只能生效一次（Enter 与 blur 都会调，避免重复）
+function commitRename(inp){
+  if(inp.dataset.done)return;
+  inp.dataset.done='1';
+  let old=inp.dataset.old||'',v=inp.value.trim();
+  if(inp.dataset.esc||v===old){
+    if(inp.parentNode)inp.parentNode.replaceChild(inp._nmEl,inp);
+    return;
+  }
+  renameAct(+inp._blk.dataset.eid,inp);
+}
 async function addAct(eid,btn){
   let box=btn.closest('.ex').querySelector('.newact');
   let n=((box&&box.value)||'').trim();
@@ -937,6 +983,8 @@ function partHTML(pp){
   return `<div class="part">
     <div class="ph"><span class="pin">部位</span>
       <input class="k-p" type="text" placeholder="如 胸 / 背 / 腿" value="${esc((pp&&pp.part)||'')}">
+      <button class="xbtn" onclick="partMove(this,-1)" title="上移">↑</button>
+      <button class="xbtn" onclick="partMove(this,1)" title="下移">↓</button>
       <button class="xbtn" onclick="partDel(this)" title="删掉这个部位">✕</button></div>
     <div class="acts">${acts.map(a=>actHTML(a)).join('')}</div>
     <button class="addact" onclick="actAdd(this)">＋动作</button></div>`;
@@ -956,6 +1004,8 @@ function cardioHTML(pp){
   return `<div class="part cardio">
     <div class="ph"><span class="pin">有氧</span>
       <div style="flex:1"></div>
+      <button class="xbtn" onclick="partMove(this,-1)" title="上移">↑</button>
+      <button class="xbtn" onclick="partMove(this,1)" title="下移">↓</button>
       <button class="xbtn" onclick="partDel(this)" title="删掉有氧">✕</button></div>
     <div class="acts">${acts.map(a=>cardioActHTML(a)).join('')}</div>
     <button class="addact" onclick="actAdd(this)">＋项目</button></div>`;
@@ -963,7 +1013,7 @@ function cardioHTML(pp){
 function actHTML(a){
   a=a||{};
   return `<div class="act">
-    <input class="k-a" type="text" placeholder="动作，如 卧推" value="${esc(a.act||'')}">
+    <input class="k-a" type="text" placeholder="锻炼动作" value="${esc(a.act||'')}">
     <div class="nums"><span class="lb">组数</span>
       <input class="k-s" type="number" min="1" max="10" value="${esc(a.sets_n||3)}">
       <span class="lb">次数</span>
@@ -984,6 +1034,13 @@ function partDel(btn){
   let box=btn.closest('.parts');
   if(box.querySelectorAll('.part').length<=1){alert('至少要留一个部位');return;}
   btn.closest('.part').remove();
+}
+// 计划页里部位上下调序（只在 DOM 里挪，点「保存计划」时按 DOM 顺序落库）
+function partMove(btn,d){
+  let p=btn.closest('.part'),box=p.parentNode;
+  let sib=d<0?p.previousElementSibling:p.nextElementSibling;
+  if(!sib||!sib.classList.contains('part'))return;
+  if(d<0)box.insertBefore(p,sib); else box.insertBefore(sib,p);
 }
 function actAdd(btn){
   let p=btn.closest('.part');
@@ -1393,7 +1450,7 @@ function draw(id,pts,label,color){
 }
 async function loadChart(){
   let names=(await api('/api/act_names',{member_id:MID}))?.names||[];
-  $('v-chart').innerHTML=`<div class="card"><h3>本周概览</h3><div id="wktop">加载中…</div><div id="wkbars" style="margin-top:10px"></div></div>
+  $('v-chart').innerHTML=`<div class="card"><h3>每周概览</h3><div id="wktop">加载中…</div><div id="wkbars" style="margin-top:10px"></div></div>
     <div class="card"><h3>PR 榜 <span class="mut" style="font-size:12px">历史最好</span></h3><div id="prbox" class="mut">加载中…</div></div>
     <div class="card"><h3>动作最大重量</h3>
     <div class="row"><select class="sel" id="cn" onchange="chartEx()" style="flex:1;min-width:0">${names.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
@@ -1496,16 +1553,28 @@ async function chartEx(){
   let r=await api('/api/trend',{member_id:MID,name:n}); if(!r)return;
   draw('c1',r.points.map(p=>({d:p.date.slice(5),v:p.max_w})),n+' 最大kg','#e11d48');
 }
+// ---------- 统计页: 每周概览（可点某周查看该周数据） ----------
+let WEEKS=[],WSEL=-1;
 async function loadStats(){
   let r=await api('/api/stats',{member_id:MID,weeks:6}); if(!r||!r.weeks)return;
-  let t=r.this_week,l=r.last_week;
-  let line=w=>`${w.training} 次 · ${w.sets} 组 · ${fmtVol(w.vol)}${w.dur?' · '+fmtDur2(w.dur):''}`;
+  WEEKS=r.weeks; WSEL=WEEKS.length-1;   // 默认选本周
+  renderWk();
+}
+// 点某一周 → 上面那行显示那一周的 次/组/时长/重量
+function pickWeek(i){WSEL=i;renderWk();}
+function renderWk(){
+  if(!WEEKS.length)return;
+  let i=Math.max(0,Math.min(WEEKS.length-1,WSEL)),t=WEEKS[i],l=i>0?WEEKS[i-1]:null;
+  let line=`${t.training} 次 · ${t.sets} 组 · ${fmtVol(t.vol||0)}${t.dur?' · '+fmtDur2(t.dur):''}`;
   let diff='';
   if(l&&l.vol&&t.vol){let d=Math.round((t.vol-l.vol)/l.vol*100);
     diff=`<span class="mut" style="font-size:12px">比上周 ${d>=0?'+':''}${d}%</span>`;}
-  $('wktop').innerHTML=`<div style="font-size:17px;font-weight:700;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">${line(t)} ${diff}</div>`;
-  let mx=Math.max(1,...r.weeks.map(w=>w.vol||0));
-  $('wkbars').innerHTML=r.weeks.map(w=>`<div class="wkrow"><span class="wkd">${w.start.slice(5)}</span>
+  let cur=(i===WEEKS.length-1)?'<span class="tag t" style="font-size:11px">本周</span>':'';
+  $('wktop').innerHTML=`<div style="font-size:17px;font-weight:700;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">${line} ${diff}</div>
+    <div class="mut" style="font-size:12px;margin-top:2px">${t.start} ~ ${t.end} ${cur}</div>`;
+  let mx=Math.max(1,...WEEKS.map(w=>w.vol||0));
+  $('wkbars').innerHTML=WEEKS.map((w,k)=>`<div class="wkrow${k===i?' on':''}" onclick="pickWeek(${k})">
+    <span class="wkd">${w.start.slice(5)}</span>
     <span class="wkb"><i style="width:${Math.round((w.vol||0)/mx*100)}%"></i></span>
     <span class="wkv">${fmtVol(w.vol||0)}</span></div>`).join('');
 }
