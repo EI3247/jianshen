@@ -9,9 +9,8 @@ COPY icon-512.png /app/icon-512.png
 RUN chmod 644 /app/app.py /app/index.html /app/icon-192.png /app/icon-512.png
 
 EXPOSE 8091
-ENV ACCESS_PASSWORD=1027 \
-    SUPER_PASSWORD=1027 \
-    PORT=8091 \
+# 密码不给默认值: 不用环境变量指定时, 首次启动随机生成并打印在日志里
+ENV PORT=8091 \
     DATA_DIR=/data \
     TZ=Asia/Shanghai \
     PYTHONUNBUFFERED=1 \

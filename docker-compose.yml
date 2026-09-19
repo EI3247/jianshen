@@ -14,7 +14,7 @@ services:
       - ./data:/data
     environment:
       - TZ=Asia/Shanghai
-      - ACCESS_PASSWORD=${ACCESS_PASSWORD:-1027}
-      - SUPER_PASSWORD=${SUPER_PASSWORD:-1027}
+      - ACCESS_PASSWORD=${ACCESS_PASSWORD:-}
+      - SUPER_PASSWORD=${SUPER_PASSWORD:-}
       - PORT=${PORT:-8091}
       - DATA_DIR=/data

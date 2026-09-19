@@ -4,14 +4,23 @@
 功能: 按日期记训练(动作手写,逐组记重量x次数) / 训练休息打卡 /
       身体数据独立记录(体重体脂胸臂腰腿) / 趋势曲线 / 多成员共用
 """
-import os, re, sys, json, hmac, hashlib, sqlite3, threading, time, socket
+import os, re, sys, json, hmac, hashlib, sqlite3, threading, time, socket, secrets, string
 import urllib.request, urllib.error, calendar as calmod
 from datetime import date as dtdate, timedelta
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote
 
-PASSWORD = os.environ.get("ACCESS_PASSWORD", "1027")
-SUPER_PASSWORD = os.environ.get("SUPER_PASSWORD", "1027")
+# 密码优先用环境变量指定; 不指定则首次启动随机生成一个, 打印在启动日志里。
+# 仓库里因此不含任何具体密码。
+PASSWORD = os.environ.get("ACCESS_PASSWORD", "").strip()
+SUPER_PASSWORD = os.environ.get("SUPER_PASSWORD", "").strip()
+
+
+def _gen_password():
+    """随机密码(首次启动没有环境变量时用)"""
+    return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(10))
+
+
 PORT = int(os.environ.get("PORT", "8091"))
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 DB_PATH = os.path.join(DATA_DIR, "jianshen.db")
@@ -137,7 +146,7 @@ def db():
             _db.execute("INSERT INTO members(name) VALUES('我')")
         for k, v in (("access_password", PASSWORD), ("super_password", SUPER_PASSWORD)):
             if _db.execute("SELECT COUNT(*) c FROM settings WHERE k=?", (k,)).fetchone()["c"] == 0:
-                _db.execute("INSERT INTO settings(k,v) VALUES(?,?)", (k, v))
+                _db.execute("INSERT INTO settings(k,v) VALUES(?,?)", (k, v or _gen_password()))
         _db.commit()
         _migrate_v2()
         _migrate_v3()
@@ -1179,7 +1188,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/members/delete":
             if not check_super(d.get("super_password")):
-                self._err("超级密码错误", 403)
+                self._err("管理密码错误", 403)
                 return
             q("DELETE FROM members WHERE id=?", (d.get("id"),), commit=True)
             mid = d.get("id")
@@ -1278,7 +1287,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/ai/config":
             if not check_super(d.get("super_password")):
-                self._err("超级密码错误", 403)
+                self._err("管理密码错误", 403)
                 return
             for k, sk in (("base", "ai_base"), ("model", "ai_model")):
                 if k in d:
@@ -1338,7 +1347,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/members/rename":
             if not check_super(d.get("super_password")):
-                self._err("超级密码错误", 403)
+                self._err("管理密码错误", 403)
                 return
             name = str(d.get("name", "")).strip()[:20]
             if not name:
@@ -1353,7 +1362,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/settings/passwords":
             if not check_super(d.get("super_password")):
-                self._err("超级密码错误", 403)
+                self._err("管理密码错误", 403)
                 return
             na = str(d.get("access_password", "")).strip()
             ns = str(d.get("super_new", "")).strip()
@@ -1931,6 +1940,11 @@ def main():
     _prep_data_dir()
     db()
     print(f"健身记录启动: http://0.0.0.0:{PORT}  数据: {DB_PATH}", flush=True)
+    # 没通过环境变量指定密码时, 把当前密码打出来, 免得第一次用不知道密码
+    if not PASSWORD:
+        print(f"  访问密码: {get_setting('access_password', '')}", flush=True)
+    if not SUPER_PASSWORD:
+        print(f"  管理密码: {get_setting('super_password', '')}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
 

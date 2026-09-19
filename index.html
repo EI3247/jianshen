@@ -42,8 +42,8 @@
   .top select{background:#2b3648;color:#fff;border:1px solid #3d4a61;border-radius:10px;padding:8px 6px;font-size:14px;max-width:88px}
   .top .ibtn{background:#2b3648;color:#fff;border:1px solid #3d4a61;border-radius:10px;padding:8px 10px;font-size:14px}
   .top .ibtn svg{width:16px;height:16px;display:block}
-  .modal{position:fixed;inset:0;background:rgba(15,20,30,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
-  .modal .box{background:#fff;border-radius:18px;width:100%;max-width:420px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(12,18,30,.28)}
+  .modal{position:fixed;inset:0;background:rgba(15,20,30,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:12px}
+  .modal .box{background:#fff;border-radius:18px;width:100%;max-width:480px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(12,18,30,.28)}
   .modal .mhead{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
   .modal .mhead b{font-size:16px;flex:1}
   .modal .mbody{padding:16px;overflow:auto;flex:1}
@@ -81,6 +81,24 @@
   .card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
   .mut{color:var(--mut);font-size:13px}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* 设置弹窗里的输入框: 撑满整行, 别缩成窄条 */
+  .modal .mbody .row input{flex:1 1 auto;width:100%;min-width:0;padding:12px 14px}
+
+  /* 设置弹窗底部的作者卡 */
+  .author{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+  .au{display:flex;align-items:center;gap:11px;display:flex;
+      background:linear-gradient(135deg,#f4f7ff,#e9f0ff);border:1px solid #dbe6fa;border-radius:14px;padding:12px 13px}
+  .au .av{width:40px;height:40px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg,#2563eb,#5b8ef5);color:#fff;font-size:17px;font-weight:700;
+      box-shadow:0 3px 10px rgba(37,99,235,.28)}
+  .au .tx{flex:1;min-width:0}
+  .au .tx b{display:block;font-size:14px;color:var(--ink);margin-bottom:2px}
+  .au .tx span{font-size:11.5px;color:var(--mut)}
+  .au .go{flex:none;display:flex;align-items:center;gap:4px;text-decoration:none;font-size:12.5px;font-weight:700;
+      color:#2563eb;background:#fff;border:1px solid #d3e0f7;border-radius:10px;padding:7px 11px}
+  .au .go:active{background:#eef4ff}
+  .aufoot{text-align:center;font-size:11.5px;color:var(--mut);margin-top:10px;line-height:1.6}
+  .aufoot a{color:#2563eb;text-decoration:none}
   /* 表单行（计划页周期设置） */
   .frm{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px 12px;align-items:center}
   .frm .fl{font-size:13px;color:var(--mut);white-space:nowrap}
@@ -457,8 +475,8 @@ async function openSettings(){
     <div class="mhead"><b>设置</b><button class="btn gr sm" onclick="closeSettings()">关闭</button></div>
     <div class="mbody">
       <div id="lockbox">
-        <div class="msub">成员管理、改密码、导出数据需要超级密码</div>
-        <div class="row"><input type="password" id="sp" placeholder="超级密码" style="flex:1"
+        <div class="msub">成员管理、改密码、导出数据需要管理密码</div>
+        <div class="row"><input type="password" id="sp" placeholder="管理密码" style="flex:1"
           onkeydown="if(event.key==='Enter')unlockSettings()"></div>
         <div class="fbtn" style="margin-top:10px"><button class="btn b" onclick="unlockSettings()">解锁</button></div>
       </div>
@@ -468,7 +486,7 @@ async function openSettings(){
         </div>
         <div class="sec"><div class="st">修改密码</div>
           <div class="row"><input type="text" id="na" placeholder="新访问密码（留空不改）" style="flex:1"></div>
-          <div class="row" style="margin-top:8px"><input type="text" id="ns" placeholder="新超级密码（留空不改）" style="flex:1"></div>
+          <div class="row" style="margin-top:8px"><input type="text" id="ns" placeholder="新管理密码（留空不改）" style="flex:1"></div>
           <div class="fbtn" style="margin-top:10px"><button class="btn b" onclick="savePasswords()">保存密码</button></div>
         </div>
         <div class="sec"><div class="st">导出数据</div>
@@ -486,13 +504,21 @@ async function openSettings(){
           <div class="fbtn" style="margin-top:10px"><button class="btn b" onclick="saveAI()">保存</button>
           <button class="btn gr" onclick="testAI()">测试连接</button></div>
         </div>
+        <div class="author">
+          <div class="au">
+            <div class="av">健</div>
+            <div class="tx"><b>健身记录 jianshen</b><span>开源项目 · MIT License</span></div>
+            <a class="go" href="https://github.com/EI3247/jianshen" target="_blank" rel="noopener">GitHub ↗</a>
+          </div>
+          <div class="aufoot">作者 EI3247 · <a href="https://github.com/EI3247" target="_blank" rel="noopener">github.com/EI3247</a></div>
+        </div>
       </div>
     </div></div></div>`;
   if(SUPER){$('lockbox').style.display='none';$('sset').style.display='';}
 }
 function closeSettings(){$('modal').innerHTML='';}
 function unlockSettings(){
-  let v=$('sp').value; if(!v){alert('先填超级密码');return;}
+  let v=$('sp').value; if(!v){alert('先填管理密码');return;}
   api('/api/settings/passwords',{},{super_password:v}).then(r=>{
     if(r&&r.ok){SUPER=v;$('lockbox').style.display='none';$('sset').style.display='';}
     else if(r)alert(r.error);
@@ -512,7 +538,7 @@ async function delMember(id){
   let r=await api('/api/members/delete',{},{id,super_password:SUPER});
   if(r&&r.ok){MID=null;localStorage.removeItem('js_mid');await loadMembers();openSettings();tab('cal');}else if(r)alert(r.error);
 }
-function unlockFirst(){alert('先在上面填超级密码点验证');return false;}
+function unlockFirst(){alert('先在上面填管理密码点验证');return false;}
 function exp(what,fmt){location.href='/api/export?member_id='+MID+'&what='+what+'&fmt='+fmt;}
 async function savePasswords(){
   let r=await api('/api/settings/passwords',{},{super_password:SUPER,access_password:$('na').value.trim(),super_new:$('ns').value.trim()});
