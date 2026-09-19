@@ -1,0 +1,21 @@
+# 运行时数据 —— 这里面有数据库(含密码)和备份, 绝对不能提交
+data/
+backup/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 本地配置(密码)
+.env
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

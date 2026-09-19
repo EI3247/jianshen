@@ -1,0 +1,19 @@
+services:
+  jianshen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jianshen:latest
+    container_name: jianshen
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "8091:8091"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Asia/Shanghai
+      - ACCESS_PASSWORD=${ACCESS_PASSWORD:-1027}
+      - SUPER_PASSWORD=${SUPER_PASSWORD:-1027}
+      - PORT=${PORT:-8091}
+      - DATA_DIR=/data
