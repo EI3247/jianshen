@@ -146,7 +146,19 @@
   .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:10px}
   .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
   /* 动作卡 */
-  .ex{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:#fbfcfe}
+  .ex{border:1px solid var(--line);border-left:3px solid #8aa3d9;border-radius:14px;padding:12px;margin-bottom:10px;background:#fbfcfe}
+  .ex .pm{font-size:11.5px;color:var(--mut);margin:0 0 7px;line-height:1.4}
+  .foldbtn{flex:none;width:22px;height:22px;border:1px solid var(--line);background:#fff;border-radius:7px;
+    color:#4a6fa8;font-size:11px;line-height:1;cursor:pointer;padding:0}
+  .foldbtn::before{content:'▾'}
+  .ex.folded .foldbtn::before{content:'▸'}
+  .ex.folded .exbody,.ex.folded .exadd{display:none}
+  .aseq{flex:none;width:20px;height:20px;border-radius:50%;background:#eef3fb;color:#4a6fa8;
+    font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .actblk .aprog{flex:none;font-size:11.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+  .actblk .aprog.ok{color:#2f8b48;font-weight:700}
+  .actblk.done{border-color:#a9dfb2;background:#fbfefc}
+  .actblk.done .anm{color:#1d7a33}
   .actblk{background:#fff;border:1px solid var(--line);border-radius:11px;padding:8px 9px;margin-top:7px}
   .actblk .abh{display:flex;gap:6px;align-items:center}
   .actblk .anm{flex:1;min-width:0;font-weight:700;font-size:15px;border:0;background:none;padding:2px 0;border-radius:6px;
@@ -157,8 +169,8 @@
   .actblk .abtn:active{background:#eef2f8}
   .actblk .lasthint{font-size:12px;margin:2px 0 5px}
   .actblk .arow{display:flex;gap:6px;margin-top:7px}
-  .mini{flex:1;border:1px dashed #c7d3e6;background:#fafcff;color:#4a6fa8;border-radius:9px;
-    padding:7px 0;font-size:13px;font-weight:600;cursor:pointer}
+  .mini{flex:none;border:1px dashed #c7d3e6;background:#fafcff;color:#4a6fa8;border-radius:9px;
+    padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
   .mini:active{background:#eef4ff}
   /* 训练状态 */
   .feelrow{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;
@@ -169,8 +181,8 @@
     padding:7px 2px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
   .feel.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .feeltag{font-size:11px;color:var(--mut);background:#eef1f6;border-radius:6px;padding:2px 6px;margin-left:4px}
-  .ex .t{display:flex;gap:8px;align-items:center;margin-bottom:6px}
-  .ex .t b{font-size:16px;flex:1}
+  .ex .t{display:flex;gap:6px;align-items:center;margin-bottom:2px}
+  .ex .t b{font-size:17px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   table{width:100%;border-collapse:collapse;font-size:14px}
   th{color:var(--mut);font-weight:400;font-size:12px;text-align:left;padding:4px 4px}
   td{padding:5px 4px;border-top:1px solid var(--line)}
@@ -371,7 +383,7 @@
 <script>
 const $=id=>document.getElementById(id);
 const todayStr=(d)=>{d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
-let MEMBERS=[],MID=null,TAB='cal',CAL={y:0,m:0},SEL=null,DETAIL=null,AION=false;
+let MEMBERS=[],MID=null,TAB='cal',CAL={y:0,m:0},SEL=null,DETAIL=null,AION=false,FOLD={};
 const AI_QUICK=['一碗米饭','两个鸡蛋','一杯牛奶','一份鸡胸肉','一瓶可乐','一个苹果'];
 
 async function api(path,q,body){
@@ -629,17 +641,30 @@ async function loadDetail(){
       <input type="text" id="newex" list="exnames" placeholder="部位名，如 胸 / 背 / 腿" style="flex:1;min-width:120px">
       <button class="btn g" onclick="addEx()">＋部位</button>
       <button class="btn g" onclick="addCardio()">＋有氧</button></div></div>`;
+    let stats={},anyStr=false;   // 部位 -> [已填组数, 总组数, 是否有氧]
+    for(let e of r.exercises){
+      let d=0,t=0,isC=e.sets.length>0&&e.sets.every(s=>s.mins!=null);
+      for(let s of e.sets){t++; if(s.mins!=null?true:(s.weight!=null||s.reps!=null))d++;}
+      if(!isC&&t>0)anyStr=true;
+      stats[e.id]=[d,t,isC];
+    }
+    // 当天「力量部位全部练完」才全部展开；有氧不参与判定（计划里就带时长，永远算“已填”）
+    let dayDone=anyStr&&Object.keys(stats).every(k=>stats[k][2]||(stats[k][1]>0&&stats[k][0]===stats[k][1]));
     for(let e of r.exercises){
       let vol=e.sets.reduce((a,s)=>a+(+s.weight||0)*(+s.reps||0),0);
       // 按动作名分组, 保持出现顺序
       let names=[],gm={};
       e.sets.forEach(s=>{let k=s.name||'';if(!gm[k]){gm[k]=[];names.push(k);}gm[k].push(s);});
-      let blocks=names.map(nm=>{
+      let isCardio=e.sets.some(s=>s.mins!=null);
+      let hdr=true;      // hdr: 表头只在该部位第一个动作卡出现
+      let blocks=names.map((nm,ai)=>{
         let g=gm[nm];
         let nmTxt=nm?esc(nm):'<span class="mut">未命名</span>';
+        let seq=`<span class="aseq">${ai+1}</span>`;
         if(g.some(s=>s.mins!=null)){                 // 有氧项目
-          return g.map(s=>`<div class="actblk crd" data-eid="${e.id}">
+          return g.map(s=>`<div class="actblk crd${s.mins!=null?' done':''}" data-eid="${e.id}">
             <div class="abh">
+              ${seq}
               <div class="anm" data-old="${esc(nm)}" title="${esc(nm)}">${nmTxt}</div>
               <button class="abtn" onclick="editActName(this)">改名</button>
               <button class="xbtn" onclick="delAct(${e.id},this)" title="删掉这个项目">✕</button></div>
@@ -651,33 +676,49 @@ async function loadDetail(){
               <input class="ckin" type="number" step="1" min="60" max="220" value="${s.hr==null?'':s.hr}" data-id="${s.id}" data-k="h" placeholder="150" style="width:74px;text-align:center;flex:none">
             </div></div>`).join('');
         }
-        let ix=0;
-        let rows=g.map(s=>{ix++;return `<tr class="setrow"><td>第${ix}组</td>
+        let ix=0,done=0;
+        let rows=g.map(s=>{ix++;
+          let filled=(s.weight!=null||s.reps!=null);
+          if(filled)done++;
+          return `<tr class="setrow"><td>第${ix}组</td>
           <td><input type="number" step="0.5" value="${s.weight==null?'':s.weight}" data-id="${s.id}" data-k="w" placeholder="kg"></td>
           <td><input type="number" step="1" value="${s.reps==null?'':s.reps}" data-id="${s.id}" data-k="r" placeholder="次"></td>
-          <td><button class="xbtn" onclick="delSet(${s.id})">✕</button></td></tr>`;}).join('');
+          <td>${filled?`<button class="xbtn" onclick="delSet(${s.id})" title="删掉这组">✕</button>`:''}</td></tr>`;}).join('');
+        let showHdr=hdr; hdr=false;
         let lk=(e.last_by_act||{})[nm];
         let lastTxt=(lk&&lk.sets&&lk.sets.length)
           ?`上次 ${lk.date.slice(5)}：`+lk.sets.map(x=>(x.weight==null?'-':x.weight)+'×'+(x.reps==null?'-':x.reps)).join(' / '):'';
-        return `<div class="actblk" data-eid="${e.id}">
+        return `<div class="actblk${done>0&&done===g.length?' done':''}" data-eid="${e.id}">
           <div class="abh">
+            ${seq}
             <div class="anm" data-old="${esc(nm)}" title="${esc(nm)}">${nmTxt}</div>
+            <span class="aprog${done>0&&done===g.length?' ok':''}">${done}/${g.length}</span>
             <button class="abtn" onclick="editActName(this)">改名</button>
             <button class="xbtn" onclick="delAct(${e.id},this)" title="删掉这个动作">✕</button></div>
           ${lastTxt?`<div class="mut lasthint">${esc(lastTxt)}</div>`:''}
-          <table><tr><th>组</th><th>重量kg</th><th>次数</th><th></th></tr>${rows}</table>
+          <table>${showHdr?'<tr><th>组</th><th>重量kg</th><th>次数</th><th></th></tr>':''}${rows}</table>
           <div class="arow">
             <button class="mini" onclick="addActSet(${e.id},this)">＋一组</button>
             <button class="mini" onclick="dupActSet(${e.id},this)">＋同上</button></div></div>`;
       }).join('')||'<div class="mut" style="margin-top:7px">还没有动作，在下面加一个</div>';
-      h+=`<div class="ex"><div class="t"><b>${esc(e.name)}</b>
-        ${e.reps_target?`<span class="tag" style="background:#eef7f0;color:#2f8b48">目标 ${esc(e.reps_target)} 次</span>`:''}
-        ${vol>0?`<span class="mut">容量 ${Math.round(vol)}kg</span>`:''}
+      let key=SEL+'#'+e.id;
+      let st=stats[e.id]||[0,0,false];
+      // 默认收起：该力量部位已练完、且当天还没练完（全练完的那天全部展开；有氧不收）
+      let folded=(key in FOLD)?FOLD[key]:(!dayDone&&!st[2]&&st[1]>0&&st[0]===st[1]);
+      let pm=[];
+      if(e.reps_target)pm.push(`目标 ${esc(e.reps_target)} 次`);
+      pm.push(`${names.length} 个${isCardio?'项目':'动作'}`);
+      if(vol>0)pm.push(`容量 ${Math.round(vol)}kg`);
+      h+=`<div class="ex${folded?' folded':''}">
+        <div class="t">
+        <button class="foldbtn" onclick="foldEx(${e.id},this)" title="收起 / 展开"></button>
+        <b>${esc(e.name)}</b>
         <button class="xbtn" onclick="moveEx(${e.id},-1)" title="上移">↑</button>
         <button class="xbtn" onclick="moveEx(${e.id},1)" title="下移">↓</button>
         <button class="xbtn" onclick="delEx(${e.id})" title="删掉这个部位">✕</button></div>
-        ${blocks}
-        <div class="row" style="margin-top:9px">
+        <div class="pm">${pm.join(' · ')}</div>
+        <div class="exbody">${blocks}</div>
+        <div class="row exadd" style="margin-top:9px">
         <input type="text" class="newact" placeholder="锻炼动作" style="flex:1;min-width:110px">
         <button class="btn g sm" onclick="addAct(${e.id},this)">＋动作</button></div></div>`;
     }
@@ -698,6 +739,10 @@ async function loadDetail(){
     el.addEventListener('input',()=>{
       let tr=el.closest('tr');
       let g=k=>{let x=tr.querySelector('input[data-k="'+k+'"]');return x?x.value:'';};
+      // 空行不显示删除按钮；这行一填上内容就补出来（否则刚记的这组删不掉）
+      if(!tr.querySelector('.xbtn')&&(g('w')!==''||g('r')!==''))
+        tr.lastElementChild.innerHTML=`<button class="xbtn" onclick="delSet(${el.dataset.id})" title="删掉这组">✕</button>`;
+      refreshProg(el.closest('.actblk'));
       clearTimeout(tm);
       tm=setTimeout(async()=>{
         await api('/api/set/update',{},{id:+el.dataset.id,weight:g('w'),reps:g('r')});
@@ -826,6 +871,24 @@ async function addCardio(){
 async function renameEx(id,old){let n=prompt('部位改名：',old);if(!n||!n.trim())return;await api('/api/exercise/rename',{},{id,name:n.trim()});loadMembers();loadCal();}
 async function delEx(id){if(!confirm('删掉这个部位及所有组？'))return;await api('/api/exercise/delete',{},{id});loadCal();}
 async function moveEx(id,d){await api('/api/exercise/move',{},{id,dir:d<0?'up':'down'});loadCal();}
+// 部位块收起/展开（状态存 FOLD，重渲染后不丢；已练完的部位默认收起）
+function foldEx(id,btn){
+  let ex=btn.closest('.ex'); if(!ex)return;
+  let k=SEL+'#'+id;
+  FOLD[k]=ex.classList.toggle('folded');
+}
+// 输入时不重渲染整页，就地刷新这张卡的「已完成 n/m」和完成态
+function refreshProg(blk){
+  if(!blk)return;
+  let rows=blk.querySelectorAll('tr.setrow'),n=rows.length,d=0;
+  rows.forEach(tr=>{
+    let w=tr.querySelector('input[data-k="w"]'),r=tr.querySelector('input[data-k="r"]');
+    if((w&&w.value!=='')||(r&&r.value!==''))d++;
+  });
+  let p=blk.querySelector('.aprog');
+  if(p){p.textContent=d+'/'+n;p.classList.toggle('ok',d>0&&d===n);}
+  blk.classList.toggle('done',d>0&&d===n);
+}
 async function delSet(id){await api('/api/set/delete',{},{id});loadCal();}
 // --- 部位下的「动作块」 ---
 function actNameOf(btn){
