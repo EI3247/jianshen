@@ -387,8 +387,21 @@ def plan_add(mid, name="", cycle_len=4, start_date=None):
     return pid
 
 
+def plan_anchor(mid, date, sd):
+    """这个计划在这天的周期锚点 = max(计划自己的开始日期, 这天所属计划期的生效日)
+
+    用户用哪天「开始/切换」, 那天就是这个计划的 D1(生效日之前的日子照旧按老锚点/老计划算)。
+    """
+    ep = plan_epoch(mid, date)
+    try:
+        e = dtdate.fromisoformat(str(ep)[:10])
+    except (ValueError, TypeError):
+        return sd
+    return e if e > sd else sd
+
+
 def base_slot(mid, date):
-    """严格从开始日循环的槽位(不含人工位移)"""
+    """严格从锚点循环的槽位(不含人工位移)"""
     pi = plan_info(mid, date)
     if not pi:
         return None
@@ -397,6 +410,7 @@ def base_slot(mid, date):
         dd = dtdate.fromisoformat(str(date)[:10])
     except (ValueError, TypeError):
         return None
+    sd = plan_anchor(mid, date, sd)
     if dd < sd:
         return None
     return (dd.toordinal() - sd.toordinal()) % cl
@@ -1090,15 +1104,23 @@ class Handler(BaseHTTPRequestHandler):
                             cl = max(1, min(14, int(pl["cycle_len"])))
                         except (ValueError, TypeError):
                             sd, cl = None, None
-                    if sd and cl and _d(y, m, dd) >= sd:
-                        ep = _epoch_of(ds)
-                        run = sum(int(r["adj"]) for r in adjrows if ep <= r["date"] < ds)
-                        idx = (_d(y, m, dd).toordinal() - sd.toordinal() - run) % cl
-                        pd = (pds.get(pl["id"]) or {}).get(idx)
-                        if pd:
-                            cell["plan"] = pd["label"]
-                            cell["plan_type"] = pd["type"]
-                            cell["plan_idx"] = idx
+                    if sd and cl:
+                        ep = _epoch_of(ds)          # 这天所属计划期的生效日
+                        sd2 = sd
+                        try:
+                            e = _d.fromisoformat(ep[:10])
+                            if e > sd2:
+                                sd2 = e             # 生效日之后: 那天就是 D1
+                        except ValueError:
+                            pass
+                        if _d(y, m, dd) >= sd2:
+                            run = sum(int(r["adj"]) for r in adjrows if ep <= r["date"] < ds)
+                            idx = (_d(y, m, dd).toordinal() - sd2.toordinal() - run) % cl
+                            pd = (pds.get(pl["id"]) or {}).get(idx)
+                            if pd:
+                                cell["plan"] = pd["label"]
+                                cell["plan_type"] = pd["type"]
+                                cell["plan_idx"] = idx
                 out.append(cell)
             self._ok(cells=out, first_weekday=calmod.monthrange(y, m)[0], last_day=last)
             return
@@ -1663,7 +1685,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._err("计划不存在")
                 return
             if str(pl.get("start_date") or "")[:10] > frm:
-                # 新计划的周期起点晚于生效日 -> 从生效日重新起周期, 否则这段时间没有槽位
+                # 计划自己的开始日期比生效日还晚 -> 夹到生效日, 否则生效日起这段算不出槽位。
+                # 其余情况**不改 start_date**: 周期锚点由 plan_anchor() 取 max(start_date, 生效日),
+                # 所以「哪天开始/切换, 那天就是 D1」, 同时生效日之前的槽位一个都不动。
                 q("UPDATE plans SET start_date=? WHERE id=? AND member_id=?", (frm, pid, mid),
                   commit=True)
             q("""INSERT INTO plan_log(member_id,from_date,plan_id) VALUES(?,?,?)
@@ -1687,29 +1711,35 @@ class Handler(BaseHTTPRequestHandler):
             if not q("SELECT id FROM members WHERE id=?", (dst,), one=True):
                 self._err("目标成员不存在", 404)
                 return
-            with DB_LOCK:
-                for t in ("plan_log", "plan_exercises", "plan_days", "plans"):
-                    db().execute(f"DELETE FROM {t} WHERE member_id=?", (dst,))
-                db().commit()
-            src_plans = q("SELECT * FROM plans WHERE member_id=? ORDER BY id", (src,))
-            for pl in src_plans:
-                nid = plan_add(dst, pl["name"], pl["cycle_len"], pl["start_date"])
-                for r in q("""SELECT idx,label,type FROM plan_days
-                              WHERE member_id=? AND plan_id=?""", (src, pl["id"])):
-                    q("""INSERT INTO plan_days(member_id,plan_id,idx,label,type) VALUES(?,?,?,?,?)""",
-                      (dst, nid, r["idx"], r["label"], r["type"]), commit=True)
-                for r in q("""SELECT plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr
-                              FROM plan_exercises WHERE member_id=? AND plan_id=?""", (src, pl["id"])):
-                    q("""INSERT INTO plan_exercises
-                         (member_id,plan_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr)
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
-                      (dst, nid, r["plan_idx"], r["part"], r["act"], r["ord"], r["aord"],
-                       r["sets_n"], r["reps"], r["kind"], r["mins"], r["hr"]), commit=True)
-                for r in q("SELECT from_date FROM plan_log WHERE member_id=? AND plan_id=?",
-                           (src, pl["id"])):
-                    q("""INSERT OR REPLACE INTO plan_log(member_id,from_date,plan_id) VALUES(?,?,?)""",
-                      (dst, r["from_date"], nid), commit=True)
-            self._ok()
+            if len(q("SELECT id FROM plans WHERE member_id=?", (dst,))) >= 6:
+                self._err("对方的计划已达上限 6 个")
+                return
+            try:
+                pid = int(d.get("plan_id") or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            pl = q("SELECT * FROM plans WHERE id=? AND member_id=?", (pid, src), one=True) if pid else None
+            if not pl:                  # 兼容旧调用(不带 plan_id): 取来源成员当前生效的计划
+                pl = plan_at(src, dtdate.today().isoformat())
+            if not pl:
+                self._err("来源计划不存在", 404)
+                return
+            name = str(pl.get("name") or "").strip()[:20] or "计划"
+            # 复制成一个新计划(对方原有计划全部保留); 周期起点先给今天, 真正生效由「开始/切换」决定
+            nid = plan_add(dst, name, pl["cycle_len"], dtdate.today().isoformat())
+            for r in q("""SELECT idx,label,type FROM plan_days
+                          WHERE member_id=? AND plan_id=?""", (src, pl["id"])):
+                q("""INSERT INTO plan_days(member_id,plan_id,idx,label,type) VALUES(?,?,?,?,?)""",
+                  (dst, nid, r["idx"], r["label"], r["type"]), commit=True)
+            for r in q("""SELECT plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr
+                          FROM plan_exercises WHERE member_id=? AND plan_id=?""", (src, pl["id"])):
+                q("""INSERT INTO plan_exercises
+                     (member_id,plan_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                  (dst, nid, r["plan_idx"], r["part"], r["act"], r["ord"], r["aord"],
+                   r["sets_n"], r["reps"], r["kind"], r["mins"], r["hr"]), commit=True)
+            self._ok(plan_id=nid)
+            return
             return
         if path == "/api/session/start":
             mid, date = d.get("member_id"), str(d.get("date", ""))[:10]

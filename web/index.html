@@ -1020,11 +1020,11 @@ async function dupActSet(eid,btn){
 }
 
 // ---------- 计划 D1..Dn ----------
-let PLANS=[], PEDIT=0, HISTOPEN=false, PDOPEN={}, PNEDIT=false;
+let PLANS=[], PEDIT=0, HISTOPEN=false, PDOPEN={}, PNEDIT=false, PSDATE='';
 async function loadPlan(pid){
   if(pid)PEDIT=pid;
   let r=await api('/api/plan',{member_id:MID,plan_id:PEDIT||0}); if(!r)return;
-  PLANS=r.plans||[]; PEDIT=r.plan.id;
+  PLANS=r.plans||[]; PEDIT=r.plan.id; PSDATE=r.plan.start_date||'';
   let p=r.plan, mp={}; r.days.forEach(d=>mp[d.idx]=d);
   let pex={}; (r.exercises||[]).forEach(e=>{
     let kind=e.kind==='cardio'?'cardio':'strength';
@@ -1047,9 +1047,9 @@ async function loadPlan(pid){
     </div>
     <div class="useh">使用中 · 现在用 ${esc(nowUse.name||'—')}${nowUse.use_from?`（从 ${nowUse.use_from} 起）`:''}</div>
     <div class="useone">
-      <select class="sel" id="p-use">${PLANS.map(x=>`<option value="${x.id}"${x.in_use?' selected':''}>${esc(x.name||('计划'+x.id))}</option>`).join('')}</select>
+      <select class="sel" id="p-use" onchange="syncUseBtn()">${PLANS.map(x=>`<option value="${x.id}"${x.in_use?' selected':''}>${esc(x.name||('计划'+x.id))}</option>`).join('')}</select>
       <input type="date" id="p-use-from" value="${r.today}">
-      <button class="btn b sm" onclick="usePlan()">切换</button>
+      <button class="btn b sm" id="p-usebtn" onclick="usePlan()">切换</button>
     </div>
     <div class="dvd"></div>
     <div class="frm">
@@ -1061,12 +1061,11 @@ async function loadPlan(pid){
         <span class="unit">天</span>
       </div>
     </div>
-    <div class="frm2">
-      <div class="f2"><span class="fl">开始日期</span><input type="date" id="p-start" value="${p.start_date}"></div>
-      ${(MEMBERS||[]).filter(m=>m.id!==MID).length?`<div class="f2"><span class="fl">复制给</span>
+    ${(MEMBERS||[]).filter(m=>m.id!==MID).length?`<div class="frm2">
+      <div class="f2"><span class="fl" style="font-size:12.5px">把「<b id="pcopy-name">${esc(p.name||('计划'+p.id))}</b>」复制给</span>
         <select class="sel" id="copy-to">${(MEMBERS||[]).filter(m=>m.id!==MID).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
-        <button class="btn gr sm" onclick="copyPlan()">复制</button></div>`:''}
-    </div>
+        <button class="btn gr sm" onclick="copyPlan()">复制</button></div>
+    </div>`:''}
   </div>
   <div class="card"><h3><span id="pdaysname">${esc(p.name||('计划'+p.id))}</span>
     <span class="mut" style="font-size:12px;font-weight:400">每天安排</span><span style="flex:1"></span>
@@ -1076,6 +1075,7 @@ async function loadPlan(pid){
   <div class="card"><h3>训练记录 <span class="mut" style="font-size:12px;font-weight:400" id="hcount"></span></h3>
     <div id="hist"></div></div>`;
   $('v-plan').innerHTML=h;
+  syncUseBtn();
   renderTabs();
   renderPdays();
   let dh=await api('/api/days',{member_id:MID});
@@ -1116,16 +1116,23 @@ async function renamePlan(){
   let v=($('p-name')?.value||'').trim().slice(0,20);
   let r=await api('/api/plan/name',{},{member_id:MID,plan_id:PEDIT,name:v});
   if(r&&r.ok){let c=PLANS.find(x=>x.id===PEDIT); if(c)c.name=v; renderTabs();
-    let t=$('pdaysname'); if(t)t.textContent=v||('计划'+PEDIT);}
+    let t=$('pdaysname'); if(t)t.textContent=v||('计划'+PEDIT);
+    let c2=$('pcopy-name'); if(c2)c2.textContent=v||('计划'+PEDIT);}
   else if(r)alert(r.error);
+}
+function syncUseBtn(){        // 没开始用过的计划 -> 「开始」, 用过的 -> 「切换」
+  let sel=$('p-use'), b=$('p-usebtn'); if(!sel||!b)return;
+  let c=PLANS.find(x=>x.id===+sel.value)||{};
+  b.textContent=(c.in_use||c.use_from)?'切换':'开始';
 }
 async function usePlan(){
   let sel=$('p-use'), d=$('p-use-from');
   let pid=+(sel?sel.value:0), frm=(d?d.value:'').trim();
-  if(!pid||!frm){alert('先选计划和生效日期');return;}
+  if(!pid||!frm){alert('先选计划和日期');return;}
   await savePlan(true);
-  let n=(PLANS.find(x=>x.id===pid)||{}).name||'';
-  if(!confirm('从 '+frm+' 起改用「'+n+'」？这之前的日期不变。'))return;
+  let c=PLANS.find(x=>x.id===pid)||{}, n=c.name||'';
+  let started=!!(c.in_use||c.use_from);
+  if(!confirm('从 '+frm+' 起'+(started?'改用':'开始用')+'「'+n+'」？\n该计划从这天起按 D1 循环，'+frm+' 之前的日期不变。'))return;
   let r=await api('/api/plan/use',{},{member_id:MID,plan_id:pid,from_date:frm});
   if(r&&r.ok)loadPlan(PEDIT); else if(r)alert(r.error);
 }
@@ -1357,7 +1364,7 @@ async function savePlan(quiet){
       });
     });
   });
-  let r=await api('/api/plan',{},{member_id:MID,plan_id:PEDIT,cycle_len:n,start_date:$('p-start').value,days,exercises});
+  let r=await api('/api/plan',{},{member_id:MID,plan_id:PEDIT,cycle_len:n,start_date:PSDATE,days,exercises});
   if(r&&r.ok){ if(!quiet){alert('已保存');tab('cal');} }
   else if(r&&!quiet)alert(r.error);
   return !!(r&&r.ok);
@@ -1365,9 +1372,10 @@ async function savePlan(quiet){
 async function copyPlan(){
   let to=+($('copy-to')||{}).value; if(!to)return;
   let t=(MEMBERS||[]).find(m=>m.id===to)||{};
-  if(!confirm('把当前计划覆盖到「'+(t.name||'')+'」？对方原有计划会被替换。'))return;
-  let r=await api('/api/plan/copy',{},{from_member_id:MID,to_member_id:to});
-  if(r&&r.ok)alert('已复制给 '+(t.name||'')); else if(r)alert(r.error);
+  let c=PLANS.find(x=>x.id===PEDIT)||{}, n=c.name||('计划'+PEDIT);
+  if(!confirm('把「'+n+'」复制给「'+(t.name||'')+'」？\n对方会多出一个同名计划（原来的计划都保留）。'))return;
+  let r=await api('/api/plan/copy',{},{from_member_id:MID,to_member_id:to,plan_id:PEDIT});
+  if(r&&r.ok)alert('已把「'+n+'」复制给 '+(t.name||'')); else if(r)alert(r.error);
 }
 function goDay(date){
   let d=new Date(date+'T00:00:00');CAL.y=d.getFullYear();CAL.m=d.getMonth()+1;SEL=date;tab('cal');
