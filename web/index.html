@@ -408,6 +408,8 @@
     td input{padding:10px 4px}
   }
   /* 自绘弹窗 */
+  .btn:disabled{cursor:not-allowed}
+  #p-usebtn:disabled{background:#e9edf3;color:#a9b3c2;opacity:1}
   .dlgwrap{position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:80;display:flex;align-items:center;
     justify-content:center;padding:22px}
   .dlgbox{background:#fff;border-radius:16px;width:100%;max-width:330px;padding:16px 16px 14px;
@@ -1065,11 +1067,11 @@ async function dupActSet(eid,btn){
 }
 
 // ---------- 计划 D1..Dn ----------
-let PLANS=[], PEDIT=0, HISTOPEN=false, PDOPEN={}, PNEDIT=false, PSDATE='';
+let PLANS=[], PEDIT=0, HISTOPEN=false, PDOPEN={}, PNEDIT=false, PSDATE='', STARTED=false;
 async function loadPlan(pid){
   if(pid)PEDIT=pid;
   let r=await api('/api/plan',{member_id:MID,plan_id:PEDIT||0}); if(!r)return;
-  PLANS=r.plans||[]; PEDIT=r.plan.id; PSDATE=r.plan.start_date||'';
+  PLANS=r.plans||[]; PEDIT=r.plan.id; PSDATE=r.plan.start_date||''; STARTED=!!r.started_before;
   let p=r.plan, mp={}; r.days.forEach(d=>mp[d.idx]=d);
   let pex={}; (r.exercises||[]).forEach(e=>{
     let kind=e.kind==='cardio'?'cardio':'strength';
@@ -1165,18 +1167,22 @@ async function renamePlan(){
     let c2=$('pcopy-name'); if(c2)c2.textContent=v||('计划'+PEDIT);}
   else if(r)alert(r.error);
 }
-function syncUseBtn(){        // 没开始用过的计划 -> 「开始」, 用过的 -> 「切换」
+function syncUseBtn(){
+  // 从没用过(成员还没练过) -> 「开始」; 练过 -> 「切换」
+  // 选中的就是正在用的那个 -> 按钮置灰不可按(不能“切换”到正在用的计划)
   let sel=$('p-use'), b=$('p-usebtn'); if(!sel||!b)return;
   let c=PLANS.find(x=>x.id===+sel.value)||{};
-  b.textContent=(c.in_use||c.use_from)?'切换':'开始';
+  b.textContent=STARTED?'切换':'开始';
+  b.disabled=!!c.in_use && STARTED;
 }
 async function usePlan(){
+  let b=$('p-usebtn'); if(b&&b.disabled)return;
   let sel=$('p-use'), d=$('p-use-from');
   let pid=+(sel?sel.value:0), frm=(d?d.value:'').trim();
   if(!pid||!frm){alert('先选计划和日期');return;}
   await savePlan(true);
   let c=PLANS.find(x=>x.id===pid)||{}, n=c.name||'';
-  let started=!!(c.in_use||c.use_from);
+  let started=STARTED;
   if(!await uiConfirm('从 '+frm+' 起'+(started?'改用':'开始用')+'「'+n+'」？\n该计划从这天起按 D1 循环。\n'+frm+' 之前的信息不变。'))return;
   let r=await api('/api/plan/use',{},{member_id:MID,plan_id:pid,from_date:frm});
   if(r&&r.ok)loadPlan(PEDIT); else if(r)alert(r.error);

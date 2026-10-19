@@ -1035,8 +1035,13 @@ class Handler(BaseHTTPRequestHandler):
                 pl["in_use"] = bool(active.get("id") == pl["id"])
                 pl["use_from"] = next((l["from_date"] for l in logs
                                        if l["plan_id"] == pl["id"] and l["from_date"] != "0001-01-01"), "")
+            # 这个成员以前有没有真练过 —— 决定按钮叫「开始」(从没用过) 还是「切换」
+            ever = bool(
+                q("SELECT 1 FROM days WHERE member_id=? AND type='training' LIMIT 1", (mid,), one=True)
+                or q("SELECT 1 FROM sessions WHERE member_id=? LIMIT 1", (mid,), one=True)
+                or q("SELECT 1 FROM exercises WHERE member_id=? LIMIT 1", (mid,), one=True))
             self._ok(plan=plan, days=days, exercises=exs, plans=plist,
-                     active_plan_id=active.get("id"), today=today)
+                     active_plan_id=active.get("id"), today=today, started_before=ever)
             return
         if path == "/api/calendar":
             from datetime import date as _d
