@@ -407,6 +407,16 @@
     .cell{min-height:52px} .top h1{display:none}
     td input{padding:10px 4px}
   }
+  /* 自绘弹窗 */
+  .dlgwrap{position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:80;display:flex;align-items:center;
+    justify-content:center;padding:22px}
+  .dlgbox{background:#fff;border-radius:16px;width:100%;max-width:330px;padding:16px 16px 14px;
+    box-shadow:0 18px 50px rgba(12,18,30,.3)}
+  .dlgh b{font-size:15px}
+  .dlgm{font-size:14px;line-height:1.62;margin-top:6px;word-break:break-word}
+  .dlgi{width:100%;margin-top:11px;padding:11px 12px;border:1.5px solid var(--line);border-radius:11px;font-size:15px}
+  .dlgb{display:flex;gap:8px;justify-content:flex-end;margin-top:15px}
+  .dlgb .btn{padding:9px 16px;font-size:14px}
 </style>
 </head>
 <body>
@@ -458,6 +468,41 @@ const WD=['一','二','三','四','五','六','日'];
 const fmtVol=v=>(v>=1000?(v/1000).toFixed(1)+'t':Math.round(v)+'kg');
 function fmtDur2(s){let h=(s/3600)|0,m=Math.round((s%3600)/60);return (h?h+'小时':'')+(m?m+'分':'')||'0分';}
 function cellFeel(v){return v&&FEELMAP[v]?`<div class="pl2">${FEELMAP[v]}</div>`:'';}
+
+// ---------- 自绘弹窗(替代浏览器原生 alert/confirm/prompt) ----------
+function dialog(o){
+  o=o||{};
+  return new Promise(res=>{
+    let w=document.createElement('div'); w.className='dlgwrap';
+    w.innerHTML=`<div class="dlgbox">
+      ${o.title?`<div class="dlgh"><b>${esc(o.title)}</b></div>`:''}
+      ${o.msg?`<div class="dlgm">${esc(o.msg).split(String.fromCharCode(10)).join('<br>')}</div>`:''}
+      ${o.input?`<input class="dlgi" value="${esc(o.value||'')}" placeholder="${esc(o.placeholder||'')}">`:''}
+      <div class="dlgb">
+        ${o.ask?`<button class="btn gr dlgc">${esc(o.cancel||'取消')}</button>`:''}
+        <button class="btn ${o.danger?'r':'b'} dlgo">${esc(o.ok||'好')}</button>
+      </div></div>`;
+    document.body.appendChild(w);
+    let inp=w.querySelector('.dlgi');
+    let done=v=>{ w.remove(); document.removeEventListener('keydown',key); res(v); };
+    let key=e=>{
+      if(e.key==='Escape')done(o.input?null:false);
+      else if(e.key==='Enter')done(o.input?inp.value.trim():true);
+    };
+    let c=w.querySelector('.dlgc'); if(c)c.onclick=()=>done(o.input?null:false);
+    w.querySelector('.dlgo').onclick=()=>done(o.input?inp.value.trim():true);
+    w.onclick=e=>{if(e.target===w)done(o.input?null:false);};
+    document.addEventListener('keydown',key);
+    setTimeout(()=>{ if(o.input){inp.focus();inp.select();}
+                     else{let b=w.querySelector('.dlgo'); if(b)b.focus();} },60);
+  });
+}
+function uiAlert(msg,title){ return dialog({title:title||'',msg:msg,ok:'知道了'}); }
+function uiConfirm(msg,o){ o=o||{};
+  return dialog({title:o.title||'',msg:msg,ask:true,ok:o.ok||'确定',cancel:o.cancel||'取消',danger:!!o.danger}); }
+function uiPrompt(msg,val,o){ o=o||{};
+  return dialog({title:msg,input:true,value:val,placeholder:o.placeholder||'',ask:true,ok:o.ok||'确定',cancel:'取消'}); }
+window.alert=function(m){ uiAlert(m); };      // 全站 alert 也换成自绘的
 
 function tab(t){
   TAB=t;SEL=null;DETAIL=null;
@@ -538,8 +583,8 @@ function editMotto(){
   });
   inp.addEventListener('blur',done);
 }
-function addMember(){
-  let n=prompt('成员名字：'); if(!n||!n.trim())return;
+async function addMember(){
+  let n=await uiPrompt('成员名字：'); if(!n||!n.trim())return;
   api('/api/members/add',{},{name:n.trim()}).then(r=>{if(r&&r.ok){MID=r.members[r.members.length-1].id;localStorage.setItem('js_mid',MID);loadMembers().then(()=>tab(TAB));}else if(r)alert(r.error);});
 }
 function logout(){fetch('/api/logout').then(()=>location.reload());}
@@ -609,14 +654,14 @@ function unlockSettings(){
 async function renameMember(id){
   let m=(MEMBERS||[]).find(x=>x.id===id)||{};
   if(!SUPER&&!unlockFirst())return;
-  let n=prompt('改名：',m.name||''); if(!n||!n.trim())return;
+  let n=await uiPrompt('改名：',m.name||''); if(!n||!n.trim())return;
   let r=await api('/api/members/rename',{},{id,name:n.trim(),super_password:SUPER});
   if(r&&r.ok){loadMembers();openSettings();}else if(r)alert(r.error);
 }
 async function delMember(id){
   let m=(MEMBERS||[]).find(x=>x.id===id)||{};
   if(!SUPER&&!unlockFirst())return;
-  if(!confirm('删掉成员 '+(m.name||'')+' 及他所有数据？'))return;
+  if(!await uiConfirm('删掉成员 '+(m.name||'')+' 及他所有数据？'))return;
   let r=await api('/api/members/delete',{},{id,super_password:SUPER});
   if(r&&r.ok){MID=null;localStorage.removeItem('js_mid');await loadMembers();openSettings();tab('cal');}else if(r)alert(r.error);
 }
@@ -890,7 +935,7 @@ async function startTraining(pidx){
   loadMembers();loadCal();
 }
 async function markRest(){
-  if(!confirm('把 '+SEL+' 记为休息？\n（训练日改休息，当天计划会顺延到第二天）'))return;
+  if(!await uiConfirm('把 '+SEL+' 记为休息？\n（训练日改休息，当天计划会顺延到第二天）'))return;
   let r=await api('/api/day/rest',{},{member_id:MID,date:SEL});
   if(r&&r.ok)loadCal(); else if(r)alert(r.error);
 }
@@ -916,7 +961,7 @@ async function switchDay(){
 }
 async function delDay(){
   let isRest=DETAIL&&DETAIL.day&&DETAIL.day.type==='rest';
-  if(!confirm('删掉 '+SEL+' 的记录？'+(isRest?'\n（这天的休息记录会删掉，它造成的前后位移一起撤销）':'')))return;
+  if(!await uiConfirm('删掉 '+SEL+' 的记录？'+(isRest?'\n（这天的休息记录会删掉，它造成的前后位移一起撤销）':'')))return;
   await api('/api/day/delete',{},{member_id:MID,date:SEL});loadCal();
 }
 async function addEx(){
@@ -929,8 +974,8 @@ async function addCardio(){
   await api('/api/cardio/add',{},{member_id:MID,date:SEL,name:n,mins:30,hr:''});
   loadMembers();loadCal();
 }
-async function renameEx(id,old){let n=prompt('部位改名：',old);if(!n||!n.trim())return;await api('/api/exercise/rename',{},{id,name:n.trim()});loadMembers();loadCal();}
-async function delEx(id){if(!confirm('删掉这个部位及所有组？'))return;await api('/api/exercise/delete',{},{id});loadCal();}
+async function renameEx(id,old){let n=await uiPrompt('部位改名：',old);if(!n||!n.trim())return;await api('/api/exercise/rename',{},{id,name:n.trim()});loadMembers();loadCal();}
+async function delEx(id){if(!await uiConfirm('删掉这个部位及所有组？'))return;await api('/api/exercise/delete',{},{id});loadCal();}
 async function moveEx(id,d){await api('/api/exercise/move',{},{id,dir:d<0?'up':'down'});loadCal();}
 // 部位块收起/展开（状态存 FOLD，重渲染后不丢；已练完的部位默认收起）
 function foldEx(id,btn){
@@ -993,7 +1038,7 @@ async function addAct(eid,btn){
 }
 async function delAct(eid,btn){
   let n=actNameOf(btn);
-  if(!confirm('删掉「'+(n||'未命名')+'」这个动作的所有组？'))return;
+  if(!await uiConfirm('删掉「'+(n||'未命名')+'」这个动作的所有组？'))return;
   await api('/api/act/delete',{},{exercise_id:eid,name:n});
   loadCal();
 }
@@ -1107,7 +1152,7 @@ async function addPlan(){
 async function delPlan(){
   if(PLANS.length<2){alert('至少要留一个计划');return;}
   let c=PLANS.find(x=>x.id===PEDIT)||{};
-  if(!confirm('删掉「'+(c.name||'这个计划')+'」？该计划的使用记录一并删掉，历史训练记录不受影响。'))return;
+  if(!await uiConfirm('删掉「'+(c.name||'这个计划')+'」？该计划的使用记录一并删掉，历史训练记录不受影响。'))return;
   let r=await api('/api/plan/del',{},{member_id:MID,plan_id:PEDIT});
   if(r&&r.ok){let rest=PLANS.filter(x=>x.id!==PEDIT);PEDIT=rest.length?rest[0].id:0;PDOPEN={};loadPlan(PEDIT);}
   else if(r)alert(r.error);
@@ -1132,7 +1177,7 @@ async function usePlan(){
   await savePlan(true);
   let c=PLANS.find(x=>x.id===pid)||{}, n=c.name||'';
   let started=!!(c.in_use||c.use_from);
-  if(!confirm('从 '+frm+' 起'+(started?'改用':'开始用')+'「'+n+'」？\n该计划从这天起按 D1 循环，'+frm+' 之前的日期不变。'))return;
+  if(!await uiConfirm('从 '+frm+' 起'+(started?'改用':'开始用')+'「'+n+'」？\n该计划从这天起按 D1 循环。\n'+frm+' 之前的信息不变。'))return;
   let r=await api('/api/plan/use',{},{member_id:MID,plan_id:pid,from_date:frm});
   if(r&&r.ok)loadPlan(PEDIT); else if(r)alert(r.error);
 }
@@ -1373,7 +1418,7 @@ async function copyPlan(){
   let to=+($('copy-to')||{}).value; if(!to)return;
   let t=(MEMBERS||[]).find(m=>m.id===to)||{};
   let c=PLANS.find(x=>x.id===PEDIT)||{}, n=c.name||('计划'+PEDIT);
-  if(!confirm('把「'+n+'」复制给「'+(t.name||'')+'」？\n对方会多出一个同名计划（原来的计划都保留）。'))return;
+  if(!await uiConfirm('把「'+n+'」复制给「'+(t.name||'')+'」？\n对方会多出一个同名计划（原来的计划都保留）。'))return;
   let r=await api('/api/plan/copy',{},{from_member_id:MID,to_member_id:to,plan_id:PEDIT});
   if(r&&r.ok)alert('已把「'+n+'」复制给 '+(t.name||'')); else if(r)alert(r.error);
 }
@@ -1625,7 +1670,7 @@ async function saveIntakeItem(id){
   if(r&&r.ok){EEDIT=null;loadBody();} else if(r)alert(r.error);
 }
 async function clearIntake(){
-  if(!confirm('清空 '+IDATE+' 的摄入记录？'))return;
+  if(!await uiConfirm('清空 '+IDATE+' 的摄入记录？'))return;
   await api('/api/intake/clear',{},{member_id:MID,date:IDATE});
   loadBody();
 }
@@ -1693,7 +1738,7 @@ async function saveActivity(v){
   let r=await api('/api/members/activity',{},{id:MID,activity:v,from_date:todayStr()});
   if(r&&r.ok){await loadMembers();loadBody();} else if(r)alert(r.error);
 }
-async function delBody(date){if(!confirm('删掉 '+date+' 的身体数据？'))return;await api('/api/body/delete',{},{member_id:MID,date});loadBody();}
+async function delBody(date){if(!await uiConfirm('删掉 '+date+' 的身体数据？'))return;await api('/api/body/delete',{},{member_id:MID,date});loadBody();}
 
 // ---------- 趋势 ----------
 function draw(id,pts,label,color){
