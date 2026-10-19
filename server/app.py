@@ -77,16 +77,20 @@ def db():
         CREATE TABLE IF NOT EXISTS activity_log(member_id INTEGER NOT NULL, from_date TEXT NOT NULL,
             activity REAL NOT NULL,
             PRIMARY KEY(member_id, from_date));
-        CREATE TABLE IF NOT EXISTS plans(member_id INTEGER PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS plans(id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER NOT NULL, name TEXT DEFAULT '',
             cycle_len INTEGER DEFAULT 4, start_date TEXT DEFAULT (date('now','localtime')));
-        CREATE TABLE IF NOT EXISTS plan_days(member_id INTEGER NOT NULL, idx INTEGER NOT NULL,
-            label TEXT DEFAULT '', type TEXT DEFAULT 'training',
-            PRIMARY KEY(member_id, idx));
-        CREATE TABLE IF NOT EXISTS plan_exercises(member_id INTEGER NOT NULL, plan_idx INTEGER NOT NULL,
-            part TEXT NOT NULL, act TEXT NOT NULL DEFAULT '',
+        CREATE TABLE IF NOT EXISTS plan_days(member_id INTEGER NOT NULL, plan_id INTEGER NOT NULL,
+            idx INTEGER NOT NULL, label TEXT DEFAULT '', type TEXT DEFAULT 'training',
+            PRIMARY KEY(member_id, plan_id, idx));
+        CREATE TABLE IF NOT EXISTS plan_exercises(member_id INTEGER NOT NULL, plan_id INTEGER NOT NULL,
+            plan_idx INTEGER NOT NULL, part TEXT NOT NULL, act TEXT NOT NULL DEFAULT '',
             ord INTEGER DEFAULT 0, aord INTEGER DEFAULT 0,
             sets_n INTEGER DEFAULT 3, reps TEXT DEFAULT '',
-            PRIMARY KEY(member_id, plan_idx, part, act));
+            kind TEXT DEFAULT 'strength', mins REAL, hr REAL,
+            PRIMARY KEY(member_id, plan_id, plan_idx, part, act));
+        CREATE TABLE IF NOT EXISTS plan_log(member_id INTEGER NOT NULL, from_date TEXT NOT NULL,
+            plan_id INTEGER NOT NULL, PRIMARY KEY(member_id, from_date));
         CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS sessions(member_id INTEGER NOT NULL, date TEXT NOT NULL,
             start_ts INTEGER DEFAULT 0, end_ts INTEGER DEFAULT 0,
@@ -152,12 +156,70 @@ def db():
         _migrate_v2()
         _migrate_v3()
         _migrate_v4()
+        _migrate_v5()
         _cleanup_orphans()
         try:                      # 把 WAL 并回主库, 免得 -wal 一直涨(备份 .db 单文件才安全)
             _db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except sqlite3.OperationalError:
             pass
     return _db
+
+
+def _migrate_v5():
+    """单计划 -> 多计划(2026-10-19)
+
+    plans 改成一行一个计划(id/name), plan_days / plan_exercises 加 plan_id,
+    新增 plan_log(member_id, from_date, plan_id) 记录"从哪天起用哪个计划"。
+    老数据原样搬成每个成员的一条「计划1」+ 一条 from_date='0001-01-01' 的基线,
+    所以历史日期的槽位算法完全不变。整段在一个事务里跑, 中途失败回滚(别留半成品)。
+    """
+    d = db()
+    cols = {r[1] for r in d.execute("PRAGMA table_info(plan_days)").fetchall()}
+    if not cols or "plan_id" in cols:
+        return
+    stmts = [
+        "ALTER TABLE plans RENAME TO plans_v4",
+        "ALTER TABLE plan_days RENAME TO plan_days_v4",
+        "ALTER TABLE plan_exercises RENAME TO plan_exercises_v4",
+        """CREATE TABLE plans(id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER NOT NULL,
+             name TEXT DEFAULT '', cycle_len INTEGER DEFAULT 4,
+             start_date TEXT DEFAULT (date('now','localtime')))""",
+        """CREATE TABLE plan_days(member_id INTEGER NOT NULL, plan_id INTEGER NOT NULL,
+             idx INTEGER NOT NULL, label TEXT DEFAULT '', type TEXT DEFAULT 'training',
+             PRIMARY KEY(member_id, plan_id, idx))""",
+        """CREATE TABLE plan_exercises(member_id INTEGER NOT NULL, plan_id INTEGER NOT NULL,
+             plan_idx INTEGER NOT NULL, part TEXT NOT NULL, act TEXT NOT NULL DEFAULT '',
+             ord INTEGER DEFAULT 0, aord INTEGER DEFAULT 0, sets_n INTEGER DEFAULT 3,
+             reps TEXT DEFAULT '', kind TEXT DEFAULT 'strength', mins REAL, hr REAL,
+             PRIMARY KEY(member_id, plan_id, plan_idx, part, act))""",
+        """INSERT INTO plans(member_id,name,cycle_len,start_date)
+             SELECT member_id, '计划1', COALESCE(cycle_len,4),
+                    COALESCE(start_date, date('now','localtime')) FROM plans_v4""",
+        """INSERT INTO plan_days(member_id,plan_id,idx,label,type)
+             SELECT d.member_id, (SELECT MIN(p.id) FROM plans p WHERE p.member_id=d.member_id),
+                    d.idx, COALESCE(d.label,''), COALESCE(d.type,'training') FROM plan_days_v4 d""",
+        """INSERT INTO plan_exercises(member_id,plan_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr)
+             SELECT e.member_id, (SELECT MIN(p.id) FROM plans p WHERE p.member_id=e.member_id),
+                    e.plan_idx, e.part, COALESCE(e.act,''), COALESCE(e.ord,0), COALESCE(e.aord,0),
+                    COALESCE(e.sets_n,3), COALESCE(e.reps,''), COALESCE(e.kind,'strength'),
+                    e.mins, e.hr
+             FROM plan_exercises_v4 e""",
+        """INSERT OR REPLACE INTO plan_log(member_id,from_date,plan_id)
+             SELECT member_id, '0001-01-01',
+                    (SELECT MIN(p.id) FROM plans p WHERE p.member_id=plans_v4.member_id)
+             FROM plans_v4""",
+        "DROP TABLE plans_v4",
+        "DROP TABLE plan_days_v4",
+        "DROP TABLE plan_exercises_v4",
+    ]
+    d.execute("BEGIN IMMEDIATE")
+    try:
+        for st in stmts:
+            d.execute(st)
+        d.execute("COMMIT")
+    except Exception:
+        d.execute("ROLLBACK")
+        raise
 
 
 def _cleanup_orphans():
@@ -167,7 +229,8 @@ def _cleanup_orphans():
     """
     d = db()
     for t in ("activity_log", "body", "days", "exercises", "intake", "intake_log",
-              "intake_tpl", "plan_days", "plan_exercises", "plans", "sessions", "skips"):
+              "intake_tpl", "plan_days", "plan_exercises", "plan_log", "plans",
+              "sessions", "skips"):
         try:
             d.execute(f"DELETE FROM {t} WHERE member_id NOT IN (SELECT id FROM members)")
         except sqlite3.OperationalError:
@@ -278,9 +341,31 @@ def is_train_day(mid, ds):
 
 
 # ---------- 计划槽位 ----------
-def plan_info(mid):
-    """(计划起始日, 周期天数)"""
-    p = q("SELECT cycle_len,start_date FROM plans WHERE member_id=?", (mid,), one=True)
+def plan_at(mid, date):
+    """这天生效的计划(整行: id/name/cycle_len/start_date)
+
+    按 plan_log 取 from_date <= 这天 的最近一条; 没有就用该成员最早的计划。
+    """
+    ds = str(date)[:10]
+    r = q("""SELECT p.* FROM plan_log l JOIN plans p ON p.id=l.plan_id
+             WHERE l.member_id=? AND l.from_date<=?
+             ORDER BY l.from_date DESC LIMIT 1""", (mid, ds), one=True)
+    if r:
+        return r
+    return q("SELECT * FROM plans WHERE member_id=? ORDER BY id LIMIT 1", (mid,), one=True)
+
+
+def plan_epoch(mid, date):
+    """这天所属"计划期"的起始日 —— 人工位移(adj)按计划期分段, 换计划就重新计数"""
+    r = q("SELECT MAX(from_date) f FROM plan_log WHERE member_id=? AND from_date<=?",
+          (mid, str(date)[:10]), one=True)
+    return (r or {}).get("f") or "0001-01-01"
+
+
+def plan_info(mid, date=None):
+    """(计划起始日, 周期天数, 计划id) —— 取 date 那天生效的计划"""
+    date = str(date or dtdate.today().isoformat())[:10]
+    p = plan_at(mid, date)
     if not p:
         return None
     try:
@@ -288,15 +373,26 @@ def plan_info(mid):
         cl = max(1, min(14, int(p["cycle_len"])))
     except (ValueError, TypeError):
         return None
-    return sd, cl
+    return sd, cl, int(p["id"])
+
+
+def plan_add(mid, name="", cycle_len=4, start_date=None):
+    """新建一个计划, 返回新计划的 id"""
+    sd = str(start_date or dtdate.today().isoformat())[:10]
+    with DB_LOCK:
+        cur = db().execute("INSERT INTO plans(member_id,name,cycle_len,start_date) VALUES(?,?,?,?)",
+                           (mid, name or "计划", max(1, min(14, int(cycle_len or 4))), sd))
+        pid = cur.lastrowid
+        db().commit()
+    return pid
 
 
 def base_slot(mid, date):
     """严格从开始日循环的槽位(不含人工位移)"""
-    pi = plan_info(mid)
+    pi = plan_info(mid, date)
     if not pi:
         return None
-    sd, cl = pi
+    sd, cl, _ = pi
     try:
         dd = dtdate.fromisoformat(str(date)[:10])
     except (ValueError, TypeError):
@@ -307,9 +403,14 @@ def base_slot(mid, date):
 
 
 def offset_before(mid, date):
-    """这天之前累计的人工位移(+1 顺延 / -1 提前)"""
-    r = q("SELECT COALESCE(SUM(adj),0) s FROM days WHERE member_id=? AND date<?",
-          (mid, str(date)[:10]), one=True)
+    """这天之前、**本计划期内**累计的人工位移(+1 顺延 / -1 提前)
+
+    按计划期分段: 换计划那天起重新计数, 否则新计划会被上一个计划积累的位移顶偏。
+    """
+    ds = str(date)[:10]
+    ep = plan_epoch(mid, ds)
+    r = q("SELECT COALESCE(SUM(adj),0) s FROM days WHERE member_id=? AND date>=? AND date<?",
+          (mid, ep, ds), one=True)
     return int((r or {}).get("s") or 0)
 
 
@@ -318,7 +419,10 @@ def slot_at(mid, date):
     b = base_slot(mid, date)
     if b is None:
         return None
-    cl = plan_info(mid)[1]
+    pi = plan_info(mid, date)
+    if not pi:
+        return None
+    cl = pi[1]
     return (b - offset_before(mid, date)) % cl
 
 
@@ -328,8 +432,9 @@ def act_rest(mid, date):
     - 计划是训练日(有事练不了) -> 当天计划顺延到第二天(adj=+1)
     """
     base = slot_at(mid, date)
-    pd = q("SELECT type,label FROM plan_days WHERE member_id=? AND idx=?",
-           (mid, base), one=True) if base is not None else None
+    _pi = plan_info(mid, date)
+    pd = q("SELECT type,label FROM plan_days WHERE member_id=? AND plan_id=? AND idx=?",
+           (mid, _pi[2], base), one=True) if (base is not None and _pi) else None
     old = q("SELECT adj FROM days WHERE member_id=? AND date=?", (mid, date), one=True)
     adj = 0 if (base is None or (pd and pd["type"] == "rest")) else 1
     if old is not None and int(old.get("adj") or 0) == -1:
@@ -379,10 +484,10 @@ def act_train(mid, date, force_idx=None):
     - 计划是休息日(想练) -> 用第二天的计划, 之后整体提前一天(adj=-1)
     - force_idx: 指定槽位, 不产生位移
     """
-    pi = plan_info(mid)
+    pi = plan_info(mid, date)
     if not pi:
         return None, "还没定计划"
-    sd, cl = pi
+    sd, cl, pid = pi
     adj = 0
     if force_idx is not None:
         try:
@@ -393,12 +498,14 @@ def act_train(mid, date, force_idx=None):
         base = slot_at(mid, date)
         if base is None:
             return None, "这天在计划开始日之前"
-        pd = q("SELECT * FROM plan_days WHERE member_id=? AND idx=?", (mid, base), one=True)
+        pd = q("SELECT * FROM plan_days WHERE member_id=? AND plan_id=? AND idx=?",
+               (mid, pid, base), one=True)
         if pd and pd["type"] == "rest":
             idx = None
             for step in range(1, cl + 1):
                 j = (base + step) % cl
-                pj = q("SELECT * FROM plan_days WHERE member_id=? AND idx=?", (mid, j), one=True)
+                pj = q("SELECT * FROM plan_days WHERE member_id=? AND plan_id=? AND idx=?",
+                       (mid, pid, j), one=True)
                 if pj and pj["type"] == "training":
                     idx = j
                     break
@@ -408,12 +515,13 @@ def act_train(mid, date, force_idx=None):
     label = ""
     parts = []          # [(部位, [计划项, ...]), ...] 保持顺序
     if idx is not None:
-        pd2 = q("SELECT label FROM plan_days WHERE member_id=? AND idx=?", (mid, idx), one=True)
+        pd2 = q("SELECT label FROM plan_days WHERE member_id=? AND plan_id=? AND idx=?",
+                (mid, pid, idx), one=True)
         label = (pd2 or {}).get("label") or ""
         pexs = q("""SELECT part, COALESCE(act,'') act, COALESCE(kind,'strength') kind,
                            COALESCE(sets_n,3) sets_n, COALESCE(reps,'') reps, mins, hr
-                    FROM plan_exercises WHERE member_id=? AND plan_idx=?
-                    ORDER BY ord, aord, rowid""", (mid, idx))
+                    FROM plan_exercises WHERE member_id=? AND plan_id=? AND plan_idx=?
+                    ORDER BY ord, aord, rowid""", (mid, pid, idx))
         pm = {}
         for pe in pexs:
             if pe["part"] not in pm:
@@ -758,10 +866,18 @@ def member_dump(mid):
                                                 "bmr_custom")},
             "activity_log": q("""SELECT from_date,activity FROM activity_log
                                  WHERE member_id=? ORDER BY from_date""", (mid,)),
-            "plan": q("SELECT * FROM plans WHERE member_id=?", (mid,), one=True),
-            "plan_days": q("SELECT * FROM plan_days WHERE member_id=? ORDER BY idx", (mid,)),
-            "plan_exercises": q("""SELECT * FROM plan_exercises WHERE member_id=?
-                                   ORDER BY plan_idx,ord""", (mid,)),
+            "plan": q("""SELECT p.* FROM plan_log l JOIN plans p ON p.id=l.plan_id
+                         WHERE l.member_id=? AND l.from_date<=date('now','localtime')
+                         ORDER BY l.from_date DESC LIMIT 1""", (mid,), one=True)
+                    or q("SELECT * FROM plans WHERE member_id=? ORDER BY id LIMIT 1", (mid,), one=True),
+            "plans": q("SELECT id,name,cycle_len,start_date FROM plans WHERE member_id=? ORDER BY id", (mid,)),
+            "plan_days": q("""SELECT plan_id,idx,label,type FROM plan_days WHERE member_id=?
+                              ORDER BY plan_id,idx""", (mid,)),
+            "plan_exercises": q("""SELECT plan_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr
+                                   FROM plan_exercises WHERE member_id=?
+                                   ORDER BY plan_id,plan_idx,ord,aord""", (mid,)),
+            "plan_log": q("""SELECT from_date,plan_id FROM plan_log WHERE member_id=?
+                             ORDER BY from_date""", (mid,)),
             "workouts": workouts,
             "intake": q("""SELECT id,date,kcal,protein,COALESCE(note,'') note,COALESCE(ts,0) ts
                            FROM intake_log WHERE member_id=? ORDER BY date,id""", (mid,)),
@@ -874,19 +990,39 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/plan":
             mid = g("member_id")
-            plan = q("SELECT * FROM plans WHERE member_id=?", (mid,), one=True)
-            if not plan:
-                plan = {"member_id": int(mid), "cycle_len": 4,
-                        "start_date": dtdate.today().isoformat()}
-                q("INSERT INTO plans(member_id,cycle_len,start_date) VALUES(?,?,?)",
-                  (mid, 4, plan["start_date"]), commit=True)
-            days = q("SELECT * FROM plan_days WHERE member_id=? ORDER BY idx", (mid,))
+            if not q("SELECT id FROM members WHERE id=?", (mid,), one=True):
+                self._err("成员不存在", 404)
+                return
+            plist = q("SELECT * FROM plans WHERE member_id=? ORDER BY id", (mid,))
+            if not plist:
+                plan_add(mid, "计划1")
+                plist = q("SELECT * FROM plans WHERE member_id=? ORDER BY id", (mid,))
+            try:
+                want = int(g("plan_id", "0") or 0)
+            except ValueError:
+                want = 0
+            if not any(pl["id"] == want for pl in plist):
+                ap = plan_at(mid, dtdate.today().isoformat())
+                want = ap["id"] if ap else plist[0]["id"]
+            plan = [pl for pl in plist if pl["id"] == want][0]
+            days = q("SELECT * FROM plan_days WHERE member_id=? AND plan_id=? ORDER BY idx",
+                     (mid, want))
             exs = q("""SELECT plan_idx, part, part AS name, COALESCE(act,'') act,
                               COALESCE(kind,'strength') kind, mins, hr,
                               COALESCE(ord,0) ord, COALESCE(aord,0) aord,
                               COALESCE(sets_n,3) sets_n, COALESCE(reps,'') reps
-                       FROM plan_exercises WHERE member_id=? ORDER BY plan_idx,ord,aord,rowid""", (mid,))
-            self._ok(plan=plan, days=days, exercises=exs)
+                       FROM plan_exercises WHERE member_id=? AND plan_id=?
+                       ORDER BY plan_idx,ord,aord,rowid""", (mid, want))
+            logs = q("SELECT from_date,plan_id FROM plan_log WHERE member_id=? ORDER BY from_date",
+                     (mid,))
+            today = dtdate.today().isoformat()
+            active = plan_at(mid, today) or {}
+            for pl in plist:
+                pl["in_use"] = bool(active.get("id") == pl["id"])
+                pl["use_from"] = next((l["from_date"] for l in logs
+                                       if l["plan_id"] == pl["id"] and l["from_date"] != "0001-01-01"), "")
+            self._ok(plan=plan, days=days, exercises=exs, plans=plist,
+                     active_plan_id=active.get("id"), today=today)
             return
         if path == "/api/calendar":
             from datetime import date as _d
@@ -902,19 +1038,37 @@ class Handler(BaseHTTPRequestHandler):
                         AND date>=? AND date<=?""",
                      (mid, f"{y:04d}-{m:02d}-01", f"{y:04d}-{m:02d}-{last:02d}"))
             pmap = {r["date"]: r for r in recs}
-            plan = q("SELECT * FROM plans WHERE member_id=?", (mid,), one=True)
-            pds = {r["idx"]: r for r in q("SELECT * FROM plan_days WHERE member_id=?", (mid,))}
+            # 多计划: 每天取"那天生效的计划"; 位移(adj)按计划期分段累计
+            plans = {pl["id"]: pl for pl in q("SELECT * FROM plans WHERE member_id=?", (mid,))}
+            logs = q("SELECT from_date,plan_id FROM plan_log WHERE member_id=? ORDER BY from_date", (mid,))
+            default_pl = min(plans.values(), key=lambda x: x["id"]) if plans else None
+
+            def _plan_of(ds):
+                cur = None
+                for l in logs:
+                    if str(l["from_date"]) <= ds:
+                        cur = plans.get(l["plan_id"]) or cur
+                    else:
+                        break
+                return cur or default_pl
+
+            def _epoch_of(ds):
+                ep = "0001-01-01"
+                for l in logs:
+                    if str(l["from_date"]) <= ds:
+                        ep = str(l["from_date"])
+                    else:
+                        break
+                return ep
+
+            pds = {}
+            for pl in plans.values():
+                pds[pl["id"]] = {r["idx"]: r for r in q(
+                    "SELECT idx,label,type FROM plan_days WHERE member_id=? AND plan_id=?",
+                    (mid, pl["id"]))}
+            adjrows = q("""SELECT date, COALESCE(adj,0) adj FROM days
+                           WHERE member_id=? AND COALESCE(adj,0)<>0""", (mid,))
             out = []
-            try:
-                sd = _d.fromisoformat(plan["start_date"]) if plan else None
-                cl = max(1, int(plan["cycle_len"])) if plan else 0
-            except (ValueError, TypeError):
-                sd, cl = None, 0
-            # 本月之前的累计人工位移
-            pr = q("SELECT COALESCE(SUM(adj),0) s FROM days WHERE member_id=? AND date<?",
-                   (mid, f"{y:04d}-{m:02d}-01"), one=True)
-            run = int((pr or {}).get("s") or 0)
-            # 预填充: 从开始日严格循环, 训练日和休息日都占位(休息日也排进日历)
             for dd in range(1, last + 1):
                 ds = f"{y:04d}-{m:02d}-{dd:02d}"
                 cell = {"date": ds}
@@ -927,14 +1081,24 @@ class Handler(BaseHTTPRequestHandler):
                         cell["adj"] = pmap[ds]["adj"]
                     if pmap[ds].get("feel"):
                         cell["feel"] = pmap[ds]["feel"]
-                elif sd and cl and _d(y, m, dd) >= sd:
-                    idx = (_d(y, m, dd).toordinal() - sd.toordinal() - run) % cl
-                    pd = pds.get(idx)
-                    if pd:
-                        cell["plan"] = pd["label"]
-                        cell["plan_type"] = pd["type"]
-                        cell["plan_idx"] = idx
-                run += int((pmap.get(ds) or {}).get("adj") or 0)
+                else:
+                    pl = _plan_of(ds)
+                    sd = cl = None
+                    if pl:
+                        try:
+                            sd = _d.fromisoformat(str(pl["start_date"])[:10])
+                            cl = max(1, min(14, int(pl["cycle_len"])))
+                        except (ValueError, TypeError):
+                            sd, cl = None, None
+                    if sd and cl and _d(y, m, dd) >= sd:
+                        ep = _epoch_of(ds)
+                        run = sum(int(r["adj"]) for r in adjrows if ep <= r["date"] < ds)
+                        idx = (_d(y, m, dd).toordinal() - sd.toordinal() - run) % cl
+                        pd = (pds.get(pl["id"]) or {}).get(idx)
+                        if pd:
+                            cell["plan"] = pd["label"]
+                            cell["plan_type"] = pd["type"]
+                            cell["plan_idx"] = idx
                 out.append(cell)
             self._ok(cells=out, first_weekday=calmod.monthrange(y, m)[0], last_day=last)
             return
@@ -1199,6 +1363,7 @@ class Handler(BaseHTTPRequestHandler):
             q("DELETE FROM exercises WHERE member_id=?", (mid,), commit=True)
             q("DELETE FROM body WHERE member_id=?", (mid,), commit=True)
             q("DELETE FROM plans WHERE member_id=?", (mid,), commit=True)
+            q("DELETE FROM plan_log WHERE member_id=?", (mid,), commit=True)
             q("DELETE FROM plan_days WHERE member_id=?", (mid,), commit=True)
             q("DELETE FROM plan_exercises WHERE member_id=?", (mid,), commit=True)
             q("DELETE FROM sessions WHERE member_id=?", (mid,), commit=True)
@@ -1375,6 +1540,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/plan":
             mid = d.get("member_id")
+            if not q("SELECT id FROM members WHERE id=?", (mid,), one=True):
+                self._err("成员不存在", 404)
+                return
             try:
                 cl = int(d.get("cycle_len", 4))
             except (TypeError, ValueError):
@@ -1385,9 +1553,15 @@ class Handler(BaseHTTPRequestHandler):
             if not re.match(r"^\d{4}-\d{2}-\d{2}$", sd):
                 self._err("起始日期格式错误")
                 return
-            q("""INSERT INTO plans(member_id,cycle_len,start_date) VALUES(?,?,?)
-                 ON CONFLICT(member_id) DO UPDATE SET cycle_len=excluded.cycle_len,
-                 start_date=excluded.start_date""", (mid, cl, sd), commit=True)
+            try:
+                pid = int(d.get("plan_id") or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            if not q("SELECT id FROM plans WHERE id=? AND member_id=?", (pid, mid), one=True):
+                ap = plan_at(mid, dtdate.today().isoformat())
+                pid = ap["id"] if ap else plan_add(mid, "计划1")
+            q("UPDATE plans SET cycle_len=?, start_date=? WHERE id=? AND member_id=?",
+              (cl, sd, pid, mid), commit=True)
             items = d.get("days") or []
             for it in items:
                 try:
@@ -1398,11 +1572,13 @@ class Handler(BaseHTTPRequestHandler):
                 typ = it.get("type") if it.get("type") in ("training", "rest") else "training"
                 if typ == "rest" and not label:
                     label = "休"
-                q("""INSERT INTO plan_days(member_id,idx,label,type) VALUES(?,?,?,?)
-                     ON CONFLICT(member_id,idx) DO UPDATE SET label=excluded.label, type=excluded.type""",
-                  (mid, idx, label, typ), commit=True)
-            q("DELETE FROM plan_days WHERE member_id=? AND idx>=?", (mid, cl), commit=True)
-            q("DELETE FROM plan_exercises WHERE member_id=?", (mid,), commit=True)
+                q("""INSERT INTO plan_days(member_id,plan_id,idx,label,type) VALUES(?,?,?,?,?)
+                     ON CONFLICT(member_id,plan_id,idx) DO UPDATE SET label=excluded.label,
+                     type=excluded.type""",
+                  (mid, pid, idx, label, typ), commit=True)
+            q("DELETE FROM plan_days WHERE member_id=? AND plan_id=? AND idx>=?",
+              (mid, pid, cl), commit=True)
+            q("DELETE FROM plan_exercises WHERE member_id=? AND plan_id=?", (mid, pid), commit=True)
             pexs = d.get("exercises") or []
             for pe in pexs:
                 try:
@@ -1437,9 +1613,62 @@ class Handler(BaseHTTPRequestHandler):
                         return None
                 mn, hr = _num(pe.get("mins")), _num(pe.get("hr"))
                 q("""INSERT OR REPLACE INTO plan_exercises
-                     (member_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr)
-                     VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                  (mid, pidx, nm, ac, oo, ao, sn_n, rp, kd, mn, hr), commit=True)
+                     (member_id,plan_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                  (mid, pid, pidx, nm, ac, oo, ao, sn_n, rp, kd, mn, hr), commit=True)
+            self._ok(plan_id=pid)
+            return
+        if path == "/api/plan/add":
+            mid = d.get("member_id")
+            if not q("SELECT id FROM members WHERE id=?", (mid,), one=True):
+                self._err("成员不存在", 404)
+                return
+            n = len(q("SELECT id FROM plans WHERE member_id=?", (mid,)))
+            if n >= 6:
+                self._err("最多 6 个计划")
+                return
+            name = str(d.get("name", "") or "").strip()[:20] or ("计划%d" % (n + 1))
+            pid = plan_add(mid, name)
+            self._ok(plan_id=pid)
+            return
+        if path == "/api/plan/name":
+            mid, pid = d.get("member_id"), d.get("plan_id")
+            name = str(d.get("name", "") or "").strip()[:20]
+            if not q("SELECT id FROM plans WHERE id=? AND member_id=?", (pid, mid), one=True):
+                self._err("计划不存在")
+                return
+            q("UPDATE plans SET name=? WHERE id=? AND member_id=?", (name, pid, mid), commit=True)
+            self._ok()
+            return
+        if path == "/api/plan/del":
+            mid, pid = d.get("member_id"), d.get("plan_id")
+            rest = q("SELECT id FROM plans WHERE member_id=? AND id<>?", (mid, pid))
+            if not rest:
+                self._err("至少要留一个计划")
+                return
+            q("DELETE FROM plans WHERE id=? AND member_id=?", (pid, mid), commit=True)
+            q("DELETE FROM plan_days WHERE member_id=? AND plan_id=?", (mid, pid), commit=True)
+            q("DELETE FROM plan_exercises WHERE member_id=? AND plan_id=?", (mid, pid), commit=True)
+            q("DELETE FROM plan_log WHERE member_id=? AND plan_id=?", (mid, pid), commit=True)
+            self._ok()
+            return
+        if path == "/api/plan/use":
+            mid, pid = d.get("member_id"), d.get("plan_id")
+            frm = str(d.get("from_date", "") or "")[:10]
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", frm):
+                self._err("生效日期格式错误")
+                return
+            pl = q("SELECT * FROM plans WHERE id=? AND member_id=?", (pid, mid), one=True)
+            if not pl:
+                self._err("计划不存在")
+                return
+            if str(pl.get("start_date") or "")[:10] > frm:
+                # 新计划的周期起点晚于生效日 -> 从生效日重新起周期, 否则这段时间没有槽位
+                q("UPDATE plans SET start_date=? WHERE id=? AND member_id=?", (frm, pid, mid),
+                  commit=True)
+            q("""INSERT INTO plan_log(member_id,from_date,plan_id) VALUES(?,?,?)
+                 ON CONFLICT(member_id,from_date) DO UPDATE SET plan_id=excluded.plan_id""",
+              (mid, frm, pid), commit=True)
             self._ok()
             return
         if path == "/api/plan/copy":
@@ -1459,25 +1688,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._err("目标成员不存在", 404)
                 return
             with DB_LOCK:
-                for t in ("plans", "plan_days", "plan_exercises"):
+                for t in ("plan_log", "plan_exercises", "plan_days", "plans"):
                     db().execute(f"DELETE FROM {t} WHERE member_id=?", (dst,))
-                p = db().execute("SELECT cycle_len,start_date FROM plans WHERE member_id=?",
-                                 (src,)).fetchone()
-                if p:
-                    db().execute("INSERT INTO plans(member_id,cycle_len,start_date) VALUES(?,?,?)",
-                                 (dst, p["cycle_len"], p["start_date"]))
-                for r in db().execute("SELECT idx,label,type FROM plan_days WHERE member_id=?",
-                                      (src,)).fetchall():
-                    db().execute("INSERT INTO plan_days(member_id,idx,label,type) VALUES(?,?,?,?)",
-                                 (dst, r["idx"], r["label"], r["type"]))
-                for r in db().execute("""SELECT plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr
-                                         FROM plan_exercises WHERE member_id=?""", (src,)).fetchall():
-                    db().execute("""INSERT INTO plan_exercises
-                        (member_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr)
-                        VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                        (dst, r["plan_idx"], r["part"], r["act"], r["ord"], r["aord"],
-                         r["sets_n"], r["reps"], r["kind"], r["mins"], r["hr"]))
                 db().commit()
+            src_plans = q("SELECT * FROM plans WHERE member_id=? ORDER BY id", (src,))
+            for pl in src_plans:
+                nid = plan_add(dst, pl["name"], pl["cycle_len"], pl["start_date"])
+                for r in q("""SELECT idx,label,type FROM plan_days
+                              WHERE member_id=? AND plan_id=?""", (src, pl["id"])):
+                    q("""INSERT INTO plan_days(member_id,plan_id,idx,label,type) VALUES(?,?,?,?,?)""",
+                      (dst, nid, r["idx"], r["label"], r["type"]), commit=True)
+                for r in q("""SELECT plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr
+                              FROM plan_exercises WHERE member_id=? AND plan_id=?""", (src, pl["id"])):
+                    q("""INSERT INTO plan_exercises
+                         (member_id,plan_id,plan_idx,part,act,ord,aord,sets_n,reps,kind,mins,hr)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (dst, nid, r["plan_idx"], r["part"], r["act"], r["ord"], r["aord"],
+                       r["sets_n"], r["reps"], r["kind"], r["mins"], r["hr"]), commit=True)
+                for r in q("SELECT from_date FROM plan_log WHERE member_id=? AND plan_id=?",
+                           (src, pl["id"])):
+                    q("""INSERT OR REPLACE INTO plan_log(member_id,from_date,plan_id) VALUES(?,?,?)""",
+                      (dst, r["from_date"], nid), commit=True)
             self._ok()
             return
         if path == "/api/session/start":

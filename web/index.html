@@ -238,14 +238,69 @@
   .irow .in{color:var(--mut);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .irow .sp{flex:1}
   .iempty{color:var(--mut);font-size:12.5px;padding:12px 0;text-align:center}
-  .irow.edit{flex-wrap:wrap;background:#f7faff}
-  .irow.edit input{width:74px;flex:none;text-align:center;padding:8px 6px;font-size:14px}
-  .irow.edit input.note{flex:1;min-width:110px;width:auto;text-align:left}
-  /* 记一笔的预设模板 */
-  .tplbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .irow.edit{display:block;background:#f7faff;padding:7px 1px 10px}
+  .irow.edit .l1{display:flex;align-items:center;gap:7px}
+  .irow.edit .l1 input.note{flex:1;min-width:0;text-align:left;padding:8px 10px;font-size:14px}
+  .irow.edit .l2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto;gap:6px;margin-top:6px}
+  .irow.edit .l2 input{width:100%;text-align:center;padding:8px 6px;font-size:14px}
+  /* 日常活动：全部选项平铺（名称一行 + 系数一行） */
+  .seg.actseg{flex:1;min-width:0;width:100%}
+  .seg.actseg button{flex:1;min-width:0;padding:6px 2px;font-size:12.5px;line-height:1.15}
+  .seg.actseg button i{display:block;font-style:normal;font-size:11px;font-weight:400;opacity:.62;margin-top:1px}
+  .seg.actseg button.on i{opacity:.85}
+  /* 记一笔：一套列网格（备注整行 / 热量·蛋白·按钮同一行） */
+  .log{border-top:1px solid var(--line);margin-top:14px;padding-top:11px}
+  .log .lh{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .log .lh b{font-size:13px}
+  .log .lh label{margin-left:auto;display:flex;align-items:center}
+  .log .lh input[type=date]{width:128px;padding:6px 9px;border-radius:9px;font-size:12.5px;color:var(--mut);
+    font-variant-numeric:tabular-nums}
+  .log .fld{display:flex;align-items:center;gap:6px;overflow:hidden;background:#fff;
+    border:1.5px solid var(--line);border-radius:12px;padding:0 12px}
+  .log .fld:focus-within{border-color:var(--blue)}
+  .log .fld input{flex:1;min-width:0;border:0;border-radius:0;background:transparent;outline:none;
+    padding:12px 0;font-size:15px}
+  .log .fld input[type=number]{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  .log .fld .u{flex:none;font-size:12px;color:var(--mut)}
+  .log .trio{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:7px;margin-top:8px}
+  .log .trio .btn{padding:0 15px;font-size:14px;white-space:nowrap}
+  .chips{display:flex;gap:6px;margin-top:9px;padding:2px 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .chips::-webkit-scrollbar{display:none}
+  .chips .tplbtn{flex:none}
+  .chips .tplbtn.set{padding:7px 9px;display:flex;align-items:center;border-style:dashed;
+    background:#fff;color:#8a93a6;font-weight:400}
+  .chips .tplbtn.set svg{width:15px;height:15px;display:block}
+  .chips .tplbtn.set:active{background:#f2f5fa}
+  .chips .tplbtn.set.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .tplpanel{display:none;margin-top:9px;background:#fbfcfe;border:1px solid var(--line);
+    border-radius:12px;padding:9px 11px 3px}
+  .tplpanel.open{display:block}
+  .tplpanel .tplrow:first-child{margin-top:0}
   .tplbtn{border:1px solid #cdd9ef;background:#f4f8ff;color:#31527d;border-radius:999px;
     padding:7px 13px;font-size:13px;line-height:1;cursor:pointer}
   .tplbtn:active{background:#e2ecff}
+  .chips .tplbtn.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+  /* 计划页：计划切换 / 折叠 */
+  .dvd{border-top:1px solid var(--line);margin:13px 0 11px}
+  .useh{font-size:13px;color:var(--mut);margin-top:12px}
+  .frm2{display:flex;flex-wrap:wrap;gap:8px 8px;margin-top:12px}
+  .frm2 .f2{display:flex;align-items:center;gap:6px;flex:1 1 140px;min-width:0}
+  .frm2 .f2 .fl{font-size:13px;color:var(--mut);white-space:nowrap}
+  .frm2 .f2 input[type=date]{flex:1;min-width:0;width:auto;padding:9px 6px;font-size:12.5px}
+  .frm2 .f2 .sel{flex:1;min-width:0;padding:9px 6px;font-size:12.5px}
+  .frm2 .f2 .btn{padding:9px 11px;font-size:13px}
+  .useone{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:center;margin-top:7px}
+  .useone .sel{width:100%;min-width:0}
+  .useone input[type=date]{width:118px;padding:9px 8px;font-size:12.5px}
+  @media(max-width:360px){.useone input[type=date]{width:106px}}
+  .useone .btn{padding:9px 13px;font-size:13px}
+  .pd .fbtn2{flex:none;width:26px;height:26px;line-height:1;border:1px solid var(--line);background:#fff;
+    color:var(--mut);border-radius:8px;font-size:11px;cursor:pointer;padding:0}
+  .pd.fold{padding-bottom:7px}
+  .pd.fold .parts,.pd.fold .addpart{display:none}
+  .pd:not(.fold) .pdm{display:none}
+  .pd .pdm{font-size:12px;color:var(--mut);padding:2px 0 3px 34px}
+  #hist.open{max-height:62vh;overflow:auto}
   .tplbtn.ai{background:#fff8ec;border-color:#f0dcb4;color:#a8761f}
   .tplbtn.ai:active{background:#ffefd8}
   .tplrow{display:flex;gap:6px;align-items:center;margin-top:8px}
@@ -383,8 +438,11 @@
 <script>
 const $=id=>document.getElementById(id);
 const todayStr=(d)=>{d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
-let MEMBERS=[],MID=null,TAB='cal',CAL={y:0,m:0},SEL=null,DETAIL=null,AION=false,FOLD={};
+let MEMBERS=[],MID=null,TAB='cal',CAL={y:0,m:0},SEL=null,DETAIL=null,AION=false,FOLD={},TPLOPEN=false;
 const AI_QUICK=['一碗米饭','两个鸡蛋','一杯牛奶','一份鸡胸肉','一瓶可乐','一个苹果'];
+const GEAR_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">'
+  +'<path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5z"/>'
+  +'<path d="M19 12a7 7 0 0 0-.14-1.4l2-1.55-2-3.46-2.36.95A7 7 0 0 0 14 5.1L13.7 2.6h-3.4L10 5.1a7 7 0 0 0-2.5 1.44l-2.36-.95-2 3.46 2 1.55a7 7 0 0 0 0 2.8l-2 1.55 2 3.46 2.36-.95a7 7 0 0 0 2.5 1.44l.3 2.5h3.4l.3-2.5a7 7 0 0 0 2.5-1.44l2.36.95 2-3.46-2-1.55c.1-.46.14-.93.14-1.4z"/></svg>';
 
 async function api(path,q,body){
   let url=path+(q?'?'+new URLSearchParams(q):'');
@@ -498,6 +556,7 @@ async function openSettings(){
       <div id="lockbox">
         <div class="msub">成员管理、改密码、导出数据需要管理密码</div>
         <div class="row"><input type="password" id="sp" placeholder="管理密码" style="flex:1"
+          autocomplete="new-password" autocapitalize="off" spellcheck="false"
           onkeydown="if(event.key==='Enter')unlockSettings()"></div>
         <div class="fbtn" style="margin-top:10px"><button class="btn b" onclick="unlockSettings()">解锁</button></div>
       </div>
@@ -506,8 +565,10 @@ async function openSettings(){
           <div class="fbtn" style="margin-top:8px"><button class="btn gr" onclick="closeSettings();addMember()">＋ 添加成员</button></div>
         </div>
         <div class="sec"><div class="st">修改密码</div>
-          <div class="row"><input type="text" id="na" placeholder="新访问密码（留空不改）" style="flex:1"></div>
-          <div class="row" style="margin-top:8px"><input type="text" id="ns" placeholder="新管理密码（留空不改）" style="flex:1"></div>
+          <div class="row"><input type="text" id="na" placeholder="新访问密码（留空不改）" style="flex:1"
+            autocomplete="new-password" autocapitalize="off" spellcheck="false"></div>
+          <div class="row" style="margin-top:8px"><input type="text" id="ns" placeholder="新管理密码（留空不改）" style="flex:1"
+            autocomplete="new-password" autocapitalize="off" spellcheck="false"></div>
           <div class="fbtn" style="margin-top:10px"><button class="btn b" onclick="savePasswords()">保存密码</button></div>
         </div>
         <div class="sec"><div class="st">导出数据</div>
@@ -959,9 +1020,12 @@ async function dupActSet(eid,btn){
 }
 
 // ---------- 计划 D1..Dn ----------
-async function loadPlan(){
-  let r=await api('/api/plan',{member_id:MID}); if(!r)return;
-  let p=r.plan,mp={}; r.days.forEach(d=>mp[d.idx]=d);
+let PLANS=[], PEDIT=0, HISTOPEN=false, PDOPEN={}, PNEDIT=false;
+async function loadPlan(pid){
+  if(pid)PEDIT=pid;
+  let r=await api('/api/plan',{member_id:MID,plan_id:PEDIT||0}); if(!r)return;
+  PLANS=r.plans||[]; PEDIT=r.plan.id;
+  let p=r.plan, mp={}; r.days.forEach(d=>mp[d.idx]=d);
   let pex={}; (r.exercises||[]).forEach(e=>{
     let kind=e.kind==='cardio'?'cardio':'strength';
     let arr=pex[e.plan_idx]=pex[e.plan_idx]||[];
@@ -971,35 +1035,139 @@ async function loadPlan(){
     else last.acts.push({act:e.act||'',sets_n:e.sets_n||3,reps:e.reps||''});
   });
   window._planMap=mp; window._planEx=pex;
-  let h=`<div class="card"><h3>训练周期</h3>
+  let np=PLANS.length, nowUse=PLANS.find(x=>x.in_use)||{};
+  let h=`<div class="card"><h3>计划 <span class="mut" style="font-size:12px;font-weight:400">${np} 个</span>
+    <span style="flex:1"></span>
+    <button class="xbtn xs" title="删掉本计划" onclick="delPlan()">✕</button></h3>
+    <div class="chips" id="ptabs"></div>
+    <div class="frm" id="pnrow" style="margin-top:11px${PNEDIT?'':';display:none'}">
+      <div class="fl">备注</div>
+      <div class="fv"><input type="text" id="p-name" placeholder="如：减脂期" value="${esc(p.name||'')}"
+        onchange="renamePlan()" onkeydown="if(event.key==='Enter')this.blur()"></div>
+    </div>
+    <div class="useh">使用中 · 现在用 ${esc(nowUse.name||'—')}${nowUse.use_from?`（从 ${nowUse.use_from} 起）`:''}</div>
+    <div class="useone">
+      <select class="sel" id="p-use">${PLANS.map(x=>`<option value="${x.id}"${x.in_use?' selected':''}>${esc(x.name||('计划'+x.id))}</option>`).join('')}</select>
+      <input type="date" id="p-use-from" value="${r.today}">
+      <button class="btn b sm" onclick="usePlan()">切换</button>
+    </div>
+    <div class="dvd"></div>
     <div class="frm">
       <div class="fl">循环天数</div>
       <div class="fv">
         <button class="btn gr sm" onclick="chLen(-1)">－</button>
         <input type="number" id="p-len" value="${p.cycle_len}" min="1" max="14">
         <button class="btn gr sm" onclick="chLen(1)">＋</button>
-        <span class="unit">天一循环</span>
+        <span class="unit">天</span>
       </div>
-      <div class="fl">开始日期</div>
-      <div class="fv"><input type="date" id="p-start" value="${p.start_date}"></div>
     </div>
-    <div class="mut" style="margin-top:10px">从开始日严格按 D1..Dn 循环，休息日也占位预填</div>
-    ${(MEMBERS||[]).filter(m=>m.id!==MID).length?`<div class="frm" style="margin-top:12px">
-      <div class="fl">复制给</div>
-      <div class="fv">
-        <select class="sel" id="copy-to" style="flex:1;min-width:0">${(MEMBERS||[]).filter(m=>m.id!==MID).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
-        <button class="btn gr sm" onclick="copyPlan()">复制计划</button>
-      </div></div>`:''}</div>
-    <div class="card"><h3>每天安排</h3><div id="pdays"></div>
-    <div class="row" style="margin-top:10px"><button class="btn b" onclick="savePlan()">保存计划</button></div></div>
-    <div class="card"><h3>历史记录</h3><div id="hist"></div></div>`;
+    <div class="frm2">
+      <div class="f2"><span class="fl">开始日期</span><input type="date" id="p-start" value="${p.start_date}"></div>
+      ${(MEMBERS||[]).filter(m=>m.id!==MID).length?`<div class="f2"><span class="fl">复制给</span>
+        <select class="sel" id="copy-to">${(MEMBERS||[]).filter(m=>m.id!==MID).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
+        <button class="btn gr sm" onclick="copyPlan()">复制</button></div>`:''}
+    </div>
+  </div>
+  <div class="card"><h3><span id="pdaysname">${esc(p.name||('计划'+p.id))}</span>
+    <span class="mut" style="font-size:12px;font-weight:400">每天安排</span><span style="flex:1"></span>
+    <button class="btn gr sm" id="fbtnall" onclick="foldAll()"></button></h3>
+    <div id="pdays"></div>
+    <div class="row" style="margin-top:12px"><button class="btn b" onclick="savePlan()">保存计划</button></div></div>
+  <div class="card"><h3>训练记录 <span class="mut" style="font-size:12px;font-weight:400" id="hcount"></span></h3>
+    <div id="hist"></div></div>`;
   $('v-plan').innerHTML=h;
+  renderTabs();
   renderPdays();
   let dh=await api('/api/days',{member_id:MID});
-  if(dh)$('hist').innerHTML=dh.days.map(d=>`<div class="hist" onclick="goDay('${d.date}')">
+  renderHist(dh?dh.days:[]);
+}
+function renderTabs(){
+  let el=$('ptabs'); if(!el)return;
+  el.innerHTML=PLANS.map(x=>`<button class="tplbtn${x.id===PEDIT?' on':''}" title="${x.id===PEDIT?'再点一下改备注':'切到这个计划'}"
+      onclick="tapPlanTab(${x.id})">${esc(x.name||('计划'+x.id))}</button>`).join('')
+    +`<button class="tplbtn set" title="新建计划" onclick="addPlan()">＋</button>`;
+}
+async function tapPlanTab(id){          // 点选中的计划 -> 展开/收起备注编辑框; 点别的 -> 切过去
+  if(id===PEDIT){toggleNameEdit();return;}
+  PNEDIT=false;
+  await savePlan(true);
+  PEDIT=id; loadPlan(id);
+}
+function toggleNameEdit(){
+  PNEDIT=!PNEDIT;
+  let r=$('pnrow'); if(r)r.style.display=PNEDIT?'':'none';
+  if(PNEDIT){let i=$('p-name'); if(i){i.focus(); if(i.select)i.select();}}
+}
+async function addPlan(){
+  if(PLANS.length>=6){alert('最多 6 个计划');return;}
+  await savePlan(true);
+  let r=await api('/api/plan/add',{},{member_id:MID});
+  if(r&&r.ok){PEDIT=r.plan_id;PDOPEN={};loadPlan(PEDIT);} else if(r)alert(r.error);
+}
+async function delPlan(){
+  if(PLANS.length<2){alert('至少要留一个计划');return;}
+  let c=PLANS.find(x=>x.id===PEDIT)||{};
+  if(!confirm('删掉「'+(c.name||'这个计划')+'」？该计划的使用记录一并删掉，历史训练记录不受影响。'))return;
+  let r=await api('/api/plan/del',{},{member_id:MID,plan_id:PEDIT});
+  if(r&&r.ok){let rest=PLANS.filter(x=>x.id!==PEDIT);PEDIT=rest.length?rest[0].id:0;PDOPEN={};loadPlan(PEDIT);}
+  else if(r)alert(r.error);
+}
+async function renamePlan(){
+  let v=($('p-name')?.value||'').trim().slice(0,20);
+  let r=await api('/api/plan/name',{},{member_id:MID,plan_id:PEDIT,name:v});
+  if(r&&r.ok){let c=PLANS.find(x=>x.id===PEDIT); if(c)c.name=v; renderTabs();
+    let t=$('pdaysname'); if(t)t.textContent=v||('计划'+PEDIT);}
+  else if(r)alert(r.error);
+}
+async function usePlan(){
+  let sel=$('p-use'), d=$('p-use-from');
+  let pid=+(sel?sel.value:0), frm=(d?d.value:'').trim();
+  if(!pid||!frm){alert('先选计划和生效日期');return;}
+  await savePlan(true);
+  let n=(PLANS.find(x=>x.id===pid)||{}).name||'';
+  if(!confirm('从 '+frm+' 起改用「'+n+'」？这之前的日期不变。'))return;
+  let r=await api('/api/plan/use',{},{member_id:MID,plan_id:pid,from_date:frm});
+  if(r&&r.ok)loadPlan(PEDIT); else if(r)alert(r.error);
+}
+function renderHist(days){
+  window._histDays=days;
+  let box=$('hist'); if(!box)return;
+  let c=$('hcount'); if(c)c.textContent=days.length?days.length+' 条':'';
+  if(!days.length){box.innerHTML='<span class="mut">无</span>';return;}
+  let show=HISTOPEN?days:days.slice(0,8);
+  let row=d=>`<div class="hist" onclick="goDay('${d.date}')">
     <span class="d">${d.date}</span>
     ${d.type==='rest'?'<span class="tag r">休息</span>':'<span class="tag t">训练'+(d.ex_count?` ${d.ex_count}`:'')+'</span>'}
-    <span class="n">${esc(d.note||'')}${feelTag(d.feel)}</span></div>`).join('')||'<span class="mut">无</span>';
+    <span class="n">${esc(d.note||'')}${feelTag(d.feel)}</span></div>`;
+  box.className=HISTOPEN?'open':'';
+  box.innerHTML=show.map(row).join('')
+    +`<div class="row" style="margin-top:10px"><button class="btn gr sm" onclick="toggleHist()">${
+        HISTOPEN?'收起':('展开全部 '+days.length+' 条')}</button></div>`;
+}
+function toggleHist(){HISTOPEN=!HISTOPEN;let box=$('hist');
+  if(box)renderHist((window._histDays||[]));}
+function foldDay(i){
+  PDOPEN['d'+i]=!PDOPEN['d'+i];
+  let pd=document.querySelectorAll('#pdays .pd')[i]; if(!pd)return;
+  pd.classList.toggle('fold',!PDOPEN['d'+i]);
+  let b=pd.querySelector('.fbtn2'); if(b)b.textContent=PDOPEN['d'+i]?'▾':'▸';
+  syncFoldAll();
+}
+function syncFoldAll(){
+  let b=$('fbtnall'); if(!b)return;
+  let anyOpen=false;
+  document.querySelectorAll('#pdays .pd').forEach((el,i)=>{if(PDOPEN['d'+i])anyOpen=true;});
+  b.textContent=anyOpen?'全部收起':'全部展开';
+}
+function foldAll(){
+  let pds=document.querySelectorAll('#pdays .pd');
+  let anyOpen=false; pds.forEach((el,i)=>{if(PDOPEN['d'+i])anyOpen=true;});
+  pds.forEach((el,i)=>{
+    PDOPEN['d'+i]=!anyOpen;
+    el.classList.toggle('fold',anyOpen);
+    let b=el.querySelector('.fbtn2'); if(b)b.textContent=anyOpen?'▸':'▾';
+  });
+  syncFoldAll();
 }
 function snapshotPdays(){
   let n=document.querySelectorAll('#pdays .pd').length,arr=[];
@@ -1030,15 +1198,22 @@ function renderPdays(keep, keepEx){
     let isRest=(c.type==='rest');
     let parts=pex[i]||[];
     if(!parts.length)parts=[{part:'',acts:[{act:'',sets_n:3,reps:''}]}];
-    h+=`<div class="pd">
-      <div class="pdh"><span class="di">D${i+1}</span>
+    let nAct=parts.reduce((a,pp)=>a+(((pp&&pp.acts)||[]).length),0);
+    let sum=[...new Set(parts.map(pp=>(pp.part||'').trim()||'未命名'))].join(' / ');
+    let open=!!PDOPEN['d'+i];
+    h+=`<div class="pd${open?'':' fold'}" data-i="${i}">
+      <div class="pdh">
+        <button class="fbtn2" onclick="foldDay(${i})" title="展开/收起">${open?'▾':'▸'}</button>
+        <span class="di">D${i+1}</span>
         <input class="plb" type="text" id="pl-${i}" placeholder="今日简称，如 胸日" value="${esc(c.label)}"${isRest?' style="display:none"':''}>
         <div class="seg"><button data-i="${i}" data-v="training" class="${c.type!=='rest'?'on':''}" onclick="segDay(${i},'training')">练</button><button data-i="${i}" data-v="rest" class="${c.type==='rest'?'on':''}" onclick="segDay(${i},'rest')">休</button></div></div>
+      <div class="pdm">${isRest?'休息':(sum||'还没排部位')+' · '+nAct+' 动作'}</div>
       <div class="parts"${isRest?' style="display:none"':''}>${parts.map(pp=>partHTML(pp)).join('')}</div>
       <button class="addpart"${isRest?' style="display:none"':''} onclick="partAdd(${i})">＋部位</button>
       <button class="addpart"${isRest?' style="display:none"':''} onclick="cardioAdd(${i})">＋有氧</button></div>`;
   }
   box.innerHTML=h;
+  syncFoldAll();
 }
 function partHTML(pp){
   if((pp&&pp.kind)==='cardio')return cardioHTML(pp);
@@ -1156,7 +1331,8 @@ function segDay(i,v){
   let ap=pd.querySelectorAll('.addpart'); ap.forEach(b=>b.style.display=(v==='rest')?'none':'');
 }
 $('v-plan')?.addEventListener?.('input',e=>{if(e.target&&e.target.id==='p-len')renderPdays();});
-async function savePlan(){
+async function savePlan(quiet){
+  if(!$('p-len'))return;              // 不在计划页(比如切 tab 时), 不当保存
   let n=Math.min(14,Math.max(1,+($('p-len').value||4)));
   let days=[];for(let i=0;i<n;i++){
     let on=document.querySelector(`.seg button[data-i="${i}"].on`);
@@ -1181,8 +1357,10 @@ async function savePlan(){
       });
     });
   });
-  let r=await api('/api/plan',{},{member_id:MID,cycle_len:n,start_date:$('p-start').value,days,exercises});
-  if(r&&r.ok){alert('已保存');tab('cal');}else if(r)alert(r.error);
+  let r=await api('/api/plan',{},{member_id:MID,plan_id:PEDIT,cycle_len:n,start_date:$('p-start').value,days,exercises});
+  if(r&&r.ok){ if(!quiet){alert('已保存');tab('cal');} }
+  else if(r&&!quiet)alert(r.error);
+  return !!(r&&r.ok);
 }
 async function copyPlan(){
   let to=+($('copy-to')||{}).value; if(!to)return;
@@ -1283,12 +1461,17 @@ async function loadBody(){
   let itemsHtml=ITEMS.map(it=>{
     let tm=it.ts?new Date(it.ts*1000).toTimeString().slice(0,5):'';
     if(EEDIT===it.id){
-      return `<div class="irow edit"><span class="it">${tm}</span>
-        <input type="number" step="1" inputmode="numeric" id="ed-kcal" placeholder="kcal" value="${it.kcal!=null?it.kcal:''}">
-        <input type="number" step="1" inputmode="numeric" id="ed-prot" placeholder="g" value="${it.protein!=null?it.protein:''}">
-        <input type="text" class="note" id="ed-note" placeholder="备注" value="${esc(it.note||'')}">
-        <button class="btn g sm" onclick="saveIntakeItem(${it.id})">保存</button>
-        <button class="btn gr sm" onclick="cancelEdit()">取消</button></div>`;
+      return `<div class="irow edit">
+        <div class="l1"><span class="it">${tm}</span>
+          <input type="text" class="note" id="ed-note" placeholder="备注" value="${esc(it.note||'')}"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
+        <div class="l2">
+          <input type="number" step="1" inputmode="numeric" id="ed-kcal" placeholder="kcal" autocomplete="off"
+            value="${it.kcal!=null?it.kcal:''}">
+          <input type="number" step="1" inputmode="numeric" id="ed-prot" placeholder="g" autocomplete="off"
+            value="${it.protein!=null?it.protein:''}">
+          <button class="btn g sm" onclick="saveIntakeItem(${it.id})">保存</button>
+          <button class="btn gr sm" onclick="cancelEdit()">取消</button></div></div>`;
     }
     return `<div class="irow"><span class="it">${tm}</span>
       ${it.kcal!=null?`<span class="iv">${num(it.kcal)}</span><span class="iu">kcal</span>`:''}
@@ -1315,21 +1498,33 @@ async function loadBody(){
   }).join('')||'<div class="iempty">还没有数据</div>';
   $('v-body').innerHTML=`<div class="card"><h3>热量收支 <span class="mut" style="font-size:12px;font-weight:400">摄入 / 消耗 / 目标</span></h3>
     <div class="frm"><div class="fl">日常活动</div><div class="fv">
-      <select class="sel" id="actsel" style="width:100%" onchange="saveActivity()">${ACT.map(x=>`<option value="${x[0]}"${Math.abs(+x[0]-act)<0.001?' selected':''}>${x[1]}（×${x[0]}）</option>`).join('')}</select>
+      <div class="seg actseg" id="actseg">${ACT.map(x=>`<button data-v="${x[0]}" class="${Math.abs(+x[0]-act)<0.001?'on':''}"
+        onclick="saveActivity('${x[0]}')">${x[1]}<i>×${x[0]}</i></button>`).join('')}</div>
     </div></div>
-    <div class="sect">记一笔</div>
-    <div class="row"><input type="date" id="i-date" value="${IDATE}" onchange="pickDate(this.value)" style="flex:1">
-      <input type="text" id="i-note" placeholder="备注" style="flex:1;min-width:80px"></div>
-    <div class="row" style="margin-top:8px">
-      <input type="number" id="i-kcal" step="1" inputmode="numeric" placeholder="热量 kcal" style="flex:1;min-width:90px">
-      <input type="number" id="i-protein" step="1" inputmode="numeric" placeholder="蛋白 g" style="flex:1;min-width:80px">
-      <button class="btn g" onclick="addIntake()">记一笔</button></div>
-    <div class="tplbar" id="tplbar"></div>
+    <div class="log">
+      <div class="lh"><b>记一笔</b><label>
+        <input type="date" id="i-date" value="${IDATE}" autocomplete="off" onchange="pickDate(this.value)"></label></div>
+      <div class="fld"><input type="text" id="i-note" placeholder="吃了什么（备注）" autocomplete="off"
+        autocorrect="off" autocapitalize="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter')addIntake()"></div>
+      <div class="trio">
+        <div class="fld"><input type="number" id="i-kcal" step="1" inputmode="numeric" placeholder="热量"
+          autocomplete="off" onkeydown="if(event.key==='Enter')addIntake()"><span class="u">kcal</span></div>
+        <div class="fld"><input type="number" id="i-protein" step="1" inputmode="numeric" placeholder="蛋白"
+          autocomplete="off" onkeydown="if(event.key==='Enter')addIntake()"><span class="u">g</span></div>
+        <button class="btn g" onclick="addIntake()">记一笔</button></div>
+      <div class="chips" id="tplbar"></div>
+      <div class="tplpanel${TPLOPEN?' open':''}" id="tplpanel">
+        <div id="tpl-edit"></div>
+        <div class="row" style="margin-top:9px"><button class="btn gr sm" onclick="addTpl()">＋ 加模板</button></div>
+      </div>
+    </div>
     ${AION?`<div class="row" style="margin-top:8px">
-      <input type="text" id="ai-q" placeholder="问 AI：一碗红烧肉" style="flex:1;min-width:110px"
+      <input type="text" id="ai-q" placeholder="问 AI：一碗红烧肉" style="flex:1;min-width:110px" autocomplete="off"
+        autocorrect="off" autocapitalize="off" spellcheck="false"
         onkeydown="if(event.key==='Enter')askAI(this.parentNode.querySelector('button'))">
       <button class="btn gr" onclick="askAI(this)">问</button></div>
-    <div class="tplbar">${AI_QUICK.map(x=>`<button class="tplbtn ai" onclick="askAI(null,'${x}')">${x}</button>`).join('')}</div>`:''}
+    <div class="chips">${AI_QUICK.map(x=>`<button class="tplbtn ai" onclick="askAI(null,'${x}')">${x}</button>`).join('')}</div>`:''}
     ${dayHtml}
     <div class="ilist">${itemsHtml}</div>
     <details class="setbox"${ESET?' open':''} ontoggle="ESET=this.open"><summary>设置</summary>
@@ -1346,9 +1541,6 @@ async function loadBody(){
           <span class="unit">kcal</span></div>
       </div>
       <div class="row" style="margin-top:12px"><button class="btn g sm" onclick="saveTargets()">保存目标</button></div>
-      <div class="sect">预设模板</div>
-      <div id="tpl-edit"></div>
-      <div class="row" style="margin-top:10px"><button class="btn gr sm" onclick="addTpl()">＋ 加模板</button></div>
     </details>
     <div class="sect">最近 14 天</div>${erows}</div>
     <details class="card"><summary>记一次身体数据</summary>
@@ -1401,7 +1593,7 @@ async function testAI(){
   if(b){b.disabled=true;b.innerText='测试中…';}
   await api('/api/ai/config',{},{super_password:SUPER,base:$('ai-base').value,
     key:$('ai-key').value,model:$('ai-model').value});
-  let r=await api('/api/ai/test',{});
+  let r=await api('/api/ai/test',null,{});
   if(b){b.disabled=false;b.innerText='测试连接';}
   if(r&&r.ok)alert('连接正常，模型回复：'+r.reply);
   else if(r)alert(r.error||'测试失败');
@@ -1438,9 +1630,14 @@ async function saveTargets(){
 // ---------- 记一笔的预设模板 ----------
 function renderTplBar(){
   let el=$('tplbar'); if(!el)return;
-  let h=TPLS.map((t,i)=>(t.name&&String(t.name).trim())
+  el.innerHTML=`<button class="tplbtn set${TPLOPEN?' on':''}" title="模板设置" onclick="toggleTplPanel(this)">${GEAR_SVG}</button>`
+    +TPLS.map((t,i)=>(t.name&&String(t.name).trim())
     ?`<button class="tplbtn" onclick="useTpl(${i})">${esc(t.name)}</button>`:'').join('');
-  el.innerHTML=h; el.style.display=h?'':'none';
+}
+function toggleTplPanel(btn){       // 就地向下展开/收起模板编辑面板
+  TPLOPEN=!TPLOPEN;
+  let p=$('tplpanel'); if(p)p.classList.toggle('open',TPLOPEN);
+  if(btn)btn.classList.toggle('on',TPLOPEN);
 }
 function renderTplEdit(){
   let el=$('tpl-edit'); if(!el)return;
@@ -1482,8 +1679,9 @@ async function saveBody(){
     birth:$('b-birth').value,sex:$('b-sex').value});
   await loadMembers();loadBody();
 }
-async function saveActivity(){
-  let v=$('actsel').value;
+async function saveActivity(v){
+  if(!v)return;
+  document.querySelectorAll('#actseg button').forEach(b=>b.classList.toggle('on',b.dataset.v===String(v)));
   let r=await api('/api/members/activity',{},{id:MID,activity:v,from_date:todayStr()});
   if(r&&r.ok){await loadMembers();loadBody();} else if(r)alert(r.error);
 }
