@@ -29,15 +29,12 @@
   /* 顶栏居中文字：可点改，过长左右滚动 */
   .motto{position:absolute;left:50%;transform:translateX(-50%);max-width:46%;
     overflow:hidden;white-space:nowrap;font-size:13px;line-height:20px;
-    color:#93a4bb;text-align:center;cursor:pointer;padding:1px 0}
+    color:#93a4bb;text-align:center;cursor:pointer;padding:4px 8px;border-radius:8px}
   .motto span{display:inline-block}
   .motto .ph{color:#63748c}
   .motto.roll{text-align:left}
-  .motto.roll span{padding-left:100%;animation:marq linear infinite}
+  .motto.roll span{padding-left:28px;animation:marq linear infinite}  /* 间距别用 100%: 那会在左边留一整屏空白 */
   @keyframes marq{from{transform:translateX(0)}to{transform:translateX(-100%)}}
-  .motto-in{position:absolute;left:50%;transform:translateX(-50%);width:46%;max-width:190px;
-    padding:5px 8px;border-radius:9px;border:1px solid #46536b;background:#2b3648;color:#fff;
-    font-size:13px;text-align:center;outline:none}
   .top h1{font-size:16px;margin:0;white-space:nowrap}
   .top select{background:#2b3648;color:#fff;border:1px solid #3d4a61;border-radius:10px;padding:8px 6px;font-size:14px;max-width:88px}
   .top .ibtn{background:#2b3648;color:#fff;border:1px solid #3d4a61;border-radius:10px;padding:8px 10px;font-size:14px}
@@ -417,7 +414,18 @@
   .dlgh b{font-size:15px}
   .dlgm{font-size:14px;line-height:1.62;margin-top:6px;word-break:break-word}
   .dlgi{width:100%;margin-top:11px;padding:11px 12px;border:1.5px solid var(--line);border-radius:11px;font-size:15px}
-  .dlgb{display:flex;gap:8px;justify-content:flex-end;margin-top:15px}
+  .dlgb{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:15px}
+  .dlgx{margin-right:auto;display:flex;align-items:center;background:#eef1f6;color:#46536b;
+    border:0;border-radius:10px;padding:8px 10px;cursor:pointer}
+  .dlgmeta{font-size:12px;color:var(--mut);margin-top:9px;line-height:1.5;word-break:break-word}
+  .dlga{width:100%;margin-top:11px;padding:11px 12px;border:1.5px solid var(--line);
+    border-radius:11px;font-size:14px;line-height:1.5;min-height:66px;resize:vertical;
+    font-family:inherit;outline:none}
+  .trow{border-top:1px solid var(--line);padding:9px 0}
+  .trow:first-child{border-top:0;padding-top:0}
+  .trow input,.ti-in{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;outline:none}
+  .trow .tline2{display:grid;grid-template-columns:minmax(0,84px) minmax(0,1fr) auto;
+    gap:6px;margin-top:6px;align-items:center}
   .dlgb .btn{padding:9px 16px;font-size:14px}
 </style>
 </head>
@@ -427,7 +435,7 @@
   <h1>💪 健身</h1>
   <select id="mem"></select>
   <div class="sp"></div>
-  <div class="motto" id="motto" onclick="editMotto()" title="点一下修改"></div>
+  <div class="motto" id="motto" onclick="mottoClick()" title="点一下看全文"></div>
   <button class="ibtn" onclick="openSettings()" title="设置"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5z" stroke="#fff" stroke-width="1.8"/><path d="M19 12a7 7 0 0 0-.14-1.4l2-1.55-2-3.46-2.36.95A7 7 0 0 0 14 5.1L13.7 2.6h-3.4L10 5.1a7 7 0 0 0-2.5 1.44l-2.36-.95-2 3.46 2 1.55a7 7 0 0 0 0 2.8l-2 1.55 2 3.46 2.36-.95a7 7 0 0 0 2.5 1.44l.3 2.5h3.4l.3-2.5a7 7 0 0 0 2.5-1.44l2.36.95 2-3.46-2-1.55c.1-.46.14-.93.14-1.4z" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
   <button class="ibtn" onclick="logout()">退出</button>
 </div>
@@ -479,8 +487,11 @@ function dialog(o){
     w.innerHTML=`<div class="dlgbox">
       ${o.title?`<div class="dlgh"><b>${esc(o.title)}</b></div>`:''}
       ${o.msg?`<div class="dlgm">${esc(o.msg).split(String.fromCharCode(10)).join('<br>')}</div>`:''}
+      ${o.note?`<div class="dlgmeta">${esc(o.note)}</div>`:''}
+      ${o.textarea?`<textarea class="dlga" placeholder="${esc(o.placeholder||'')}">${esc(o.value||'')}</textarea>`:''}
       ${o.input?`<input class="dlgi" value="${esc(o.value||'')}" placeholder="${esc(o.placeholder||'')}">`:''}
       <div class="dlgb">
+        ${o.extra?`<button class="dlgx" title="${esc(o.extraTitle||'')}">${o.extra}</button>`:''}
         ${o.ask?`<button class="btn gr dlgc">${esc(o.cancel||'取消')}</button>`:''}
         <button class="btn ${o.danger?'r':'b'} dlgo">${esc(o.ok||'好')}</button>
       </div></div>`;
@@ -488,14 +499,18 @@ function dialog(o){
     let inp=w.querySelector('.dlgi');
     let done=v=>{ w.remove(); document.removeEventListener('keydown',key); res(v); };
     let key=e=>{
-      if(e.key==='Escape')done(o.input?null:false);
-      else if(e.key==='Enter')done(o.input?inp.value.trim():true);
+      if(e.key==='Escape')done(o.input||o.textarea?null:false);
+      else if(e.key==='Enter'&&!o.textarea)done(o.input?(inp?inp.value.trim():''):true);
     };
-    let c=w.querySelector('.dlgc'); if(c)c.onclick=()=>done(o.input?null:false);
-    w.querySelector('.dlgo').onclick=()=>done(o.input?inp.value.trim():true);
-    w.onclick=e=>{if(e.target===w)done(o.input?null:false);};
+    let ta=w.querySelector('.dlga');
+    let val=()=>ta?ta.value.trim():(o.input?(inp?inp.value.trim():''):true);
+    let c=w.querySelector('.dlgc'); if(c)c.onclick=()=>done(o.input||o.textarea?null:false);
+    let x=w.querySelector('.dlgx'); if(x)x.onclick=()=>done(o.extraValue==null?'extra':o.extraValue);
+    w.querySelector('.dlgo').onclick=()=>done(val());
+    w.onclick=e=>{if(e.target===w)done(o.input||o.textarea?null:false);};
     document.addEventListener('keydown',key);
-    setTimeout(()=>{ if(o.input){inp.focus();inp.select();}
+    setTimeout(()=>{ if(o.textarea){let t=w.querySelector('.dlga'); if(t)t.focus();}
+                     else if(o.input){if(inp){inp.focus();inp.select();}}
                      else{let b=w.querySelector('.dlgo'); if(b)b.focus();} },60);
   });
 }
@@ -533,57 +548,151 @@ async function loadMembers(){
 }
 $('mem').onchange=e=>{MID=+e.target.value;localStorage.setItem('js_mid',MID);renderMotto();tab(TAB);};
 
-// 顶栏居中文字: 显示当前成员的备注, 点一下可改, 超长左右滚动
+// 顶栏居中文字: 有备注显示备注, 没备注滚健身知识; 点一下展开全文(只读), 弹窗右下角图标进编辑
+let TIPS=[],TIPI=0,TIP_HOLD=false,MOTTO={kind:'none',text:'',cat:'',source:''};
+const TIP_ROTATE_MS=5*60*1000;          // 一条知识显示的时长: 满 5 分钟才换下一条
+let TIP_ROTATE=null,TIP_HIDDEN_AT=0;
+function scheduleTipRotate(){
+  if(TIP_ROTATE){clearTimeout(TIP_ROTATE);TIP_ROTATE=null;}
+  TIP_ROTATE=setTimeout(()=>{pickNewTip();scheduleTipRotate();},TIP_ROTATE_MS);
+}
+function pickNewTip(){
+  if(TIPS.length<2)return;
+  let n=Math.floor(Math.random()*TIPS.length);
+  if(n===TIPI%TIPS.length)n=(n+1)%TIPS.length;
+  TIPI=n; renderMotto();
+}
+// 重新进入页面(离开超过 30 秒)时换一条
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){TIP_HIDDEN_AT=Date.now();return;}
+  if(TIP_HIDDEN_AT&&Date.now()-TIP_HIDDEN_AT>=30000){pickNewTip();scheduleTipRotate();}
+  TIP_HIDDEN_AT=0;
+});
+const PEN_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;display:block"><path d="M4.5 19.5h3.6L19 8.6a2.5 2.5 0 0 0-3.5-3.5L4.5 16v3.5z"/><path d="M14 6.5l3.5 3.5"/></svg>';
+async function loadTips(){ let r=await api('/api/tips'); if(r&&r.items)TIPS=r.items; }
+function mottoPick(){
+  let m=(MEMBERS||[]).find(x=>x.id===MID)||{};
+  let note=(m.top_text||'').trim();
+  if(note)return{kind:'note',text:note,cat:'',source:''};
+  if(TIPS.length){let t=TIPS[TIPI%TIPS.length];return{kind:'tip',text:(t.body||''),cat:(t.cat||''),source:(t.source||'')};}
+  return{kind:'none',text:'点这里写一句目标',cat:'',source:''};
+}
 function renderMotto(){
   let el=$('motto'); if(!el)return;
-  let m=(MEMBERS||[]).find(x=>x.id===MID)||{};
-  let t=(m.top_text||'').trim();
-  el.dataset.txt=t;
+  let d=mottoPick(); MOTTO=d;
+  el.dataset.kind=d.kind; el.dataset.txt=d.text;
   el.classList.remove('roll');
-  el.style.maxWidth='';
-  el.innerHTML=`<span class="${t?'':'ph'}">${esc(t||'点这里写一句目标')}</span>`;
-  // 真居中, 但不能压到左右元素: 按实际空隙算最大宽度
+  el.style.maxWidth=''; el.style.left=''; el.style.right=''; el.style.transform=''; el.style.width='auto';
+  el.innerHTML=`<span class="${d.kind==='none'?'ph':''}">${esc(d.text)}</span>`;
+  // 铺满「成员选择右边 ~ 设置按钮左边」的整条空间, 不再居中留两片空白
   let bar=el.parentNode,br=bar.getBoundingClientRect();
   if(br.width){
-    let center=br.left+br.width/2,sel=$('mem'),bs=bar.querySelectorAll('button');
-    let L=(sel?sel.getBoundingClientRect().right:br.left)+8;
-    let R=br.right-8;
-    bs.forEach(b=>{let r=b.getBoundingClientRect();if(r.left>center&&r.left<R)R=r.left-8;});
-    let half=Math.max(48,Math.min(center-L,R-center));
-    el.style.maxWidth=Math.round(half*2)+'px';
+    let sel=$('mem'),bs=bar.querySelectorAll('button');
+    let X1=(sel?sel.getBoundingClientRect().right:br.left)+8, X2=br.right-8;
+    bs.forEach(b=>{let r=b.getBoundingClientRect();if(r.left>X1+4&&r.left<X2)X2=r.left-8;});
+    if(X2-X1<48){X1=br.left+8;X2=br.right-8;}
+    el.style.left=Math.round(X1-br.left)+'px';
+    el.style.right=Math.round(br.width-(X2-br.left))+'px';
+    el.style.transform='none';
+    el.style.maxWidth='none';
   }
-  if(t){
-    let s=el.firstElementChild;
-    if(s.scrollWidth>el.clientWidth+2){          // 放不下才滚动
-      el.classList.add('roll');
-      let total=el.firstElementChild.scrollWidth; // 加了 padding-left:100% 之后
-      s.style.animationDuration=Math.max(7,Math.round(total/26))+'s';
-    }
+  let s=el.firstElementChild;
+  if(d.kind!=='none'&&s&&s.scrollWidth>el.clientWidth+2){      // 放不下才滚动
+    el.classList.add('roll');
+    s.style.animationDuration=Math.max(7,Math.round(s.scrollWidth/26))+'s';
   }
+  if(d.kind==='tip'&&!TIP_HOLD)scheduleTipRotate();
+  else if(TIP_ROTATE){clearTimeout(TIP_ROTATE);TIP_ROTATE=null;}
 }
-function editMotto(){
-  let el=$('motto'); if(!el||$('motto-in'))return;
-  let cur=el.dataset.txt||'';
-  el.style.visibility='hidden';
-  let inp=document.createElement('input');
-  inp.id='motto-in'; inp.className='motto-in'; inp.value=cur; inp.maxLength=60;
-  inp.placeholder='写一句目标 / 口号';
-  el.parentNode.insertBefore(inp,el);
-  inp.focus(); inp.select();
-  let busy=false;
-  let done=async()=>{
-    if(busy)return; busy=true;
-    let v=inp.value.trim();
-    if(inp.parentNode)inp.remove();
-    el.style.visibility='';
-    if(v!==cur){await api('/api/members/top_text',{},{id:MID,text:v});await loadMembers();}
-    else renderMotto();
-  };
-  inp.addEventListener('keydown',e=>{
-    if(e.key==='Enter'){e.preventDefault();inp.blur();}
-    else if(e.key==='Escape'){inp.value=cur;inp.blur();}
+async function mottoClick(){
+  if(MOTTO.kind==='none'){await editMotto();return;}
+  TIP_HOLD=true;
+  if(TIP_ROTATE){clearTimeout(TIP_ROTATE);TIP_ROTATE=null;}
+  let el=$('motto'),sp=el&&el.firstElementChild;
+  if(sp)sp.style.animationPlayState='paused';
+  let d=MOTTO;
+  let r=await dialog({title:d.kind==='tip'?('健身知识 · '+(d.cat||'知识')):'我的备注',
+    msg:d.text, note:d.kind==='tip'?d.source:'', ok:'关闭', extra:PEN_SVG,
+    extraTitle:d.kind==='tip'?'编辑这条知识':'改备注', extraValue:'edit'});
+  if(r==='edit'){ if(d.kind==='tip')await tipEditCurrent(); else await editMotto(); }
+  TIP_HOLD=false; renderMotto();
+}
+async function editMotto(){
+  let cur=MOTTO.kind==='note'?MOTTO.text:'';
+  let v=await uiPrompt('备注（最长 60 字，留空即不显示）',cur);
+  if(v===null)return;
+  v=(v||'').trim().slice(0,60);
+  if(v===cur)return;
+  await api('/api/members/top_text',{},{id:MID,text:v});
+  await loadMembers();
+}
+// 编辑/删除单条知识(要管理密码)
+function tipModal(t){
+  return new Promise(res=>{
+    let w=document.createElement('div'); w.className='dlgwrap';
+    w.innerHTML=`<div class="dlgbox">
+      <div class="dlgh"><b>编辑这条知识</b></div>
+      <textarea class="dlga" placeholder="正文（≤60 字）">${esc(t.body||'')}</textarea>
+      <div style="display:grid;grid-template-columns:minmax(0,80px) minmax(0,1fr) auto;gap:6px;margin-top:8px;align-items:center">
+        <input class="ti-in" value="${esc(t.cat||'')}" placeholder="分类">
+        <input class="ti-in" value="${esc(t.source||'')}" placeholder="出处（可空）">
+        <button class="btn r sm" id="tipdel">删除</button>
+      </div>
+      <div class="dlgb"><button class="btn gr" id="tipc">取消</button><button class="btn b" id="tipo">保存</button></div>
+    </div>`;
+    document.body.appendChild(w);
+    let ta=w.querySelector('.dlga'),ci=w.querySelectorAll('.ti-in')[0],si=w.querySelectorAll('.ti-in')[1];
+    let done=v=>{w.remove();document.removeEventListener('keydown',key);res(v);};
+    let key=e=>{if(e.key==='Escape')done(null);};
+    document.addEventListener('keydown',key);
+    w.querySelector('#tipc').onclick=()=>done(null);
+    w.querySelector('#tipdel').onclick=()=>done({del:true});
+    w.querySelector('#tipo').onclick=()=>done({body:ta.value.trim(),cat:ci.value.trim(),source:si.value.trim()});
+    w.onclick=e=>{if(e.target===w)done(null);};
+    setTimeout(()=>{ta.focus();},60);
   });
-  inp.addEventListener('blur',done);
+}
+async function tipEditCurrent(){
+  if(!SUPER){
+    let v=await uiPrompt('管理密码（改知识需要）');
+    if(v===null)return;
+    let r=await api('/api/settings/passwords',{},{super_password:v});
+    if(!r||!r.ok){alert((r&&r.error)||'管理密码不对');return;}
+    SUPER=v;
+  }
+  let idx=TIPI%Math.max(1,TIPS.length), t=TIPS[idx]||{body:'',cat:'',source:''};
+  if(!TIPS.length)return;
+  let r=await tipModal(t);
+  if(!r)return;
+  if(r.del)TIPS.splice(idx,1);
+  else{ if(!r.body){alert('正文不能为空');return;} Object.assign(TIPS[idx],r); }
+  let res=await api('/api/tips',{},{super_password:SUPER,items:TIPS.map(x=>({body:x.body,cat:x.cat||'',source:x.source||''}))});
+  if(!res||!res.ok){alert((res&&res.error)||'保存失败');return;}
+  await loadTips(); if(TIPI>=TIPS.length)TIPI=0;
+}
+// 设置里的知识管理
+function renderTipEdit(){
+  let box=$('tipedit'); if(!box)return;
+  box.innerHTML=TIPS.map((t,i)=>`<div class="trow" data-i="${i}">
+      <input class="ti-body" value="${esc(t.body||'')}" placeholder="正文（≤60 字）" maxlength="60">
+      <div class="tline2"><input class="ti-cat" value="${esc(t.cat||'')}" placeholder="分类" maxlength="10">
+        <input class="ti-src" value="${esc(t.source||'')}" placeholder="出处（可空）" maxlength="80">
+        <button class="xbtn" onclick="tipDel(${i})" title="删掉这条">✕</button></div>
+    </div>`).join('')||'<div class="mut">还没有知识条目</div>';
+}
+function tipRead(){return [...document.querySelectorAll('#tipedit .trow')].map(r=>({
+  body:r.querySelector('.ti-body').value.trim(),cat:r.querySelector('.ti-cat').value.trim(),
+  source:r.querySelector('.ti-src').value.trim()}));}
+function tipAdd(){TIPS=tipRead();TIPS.push({body:'',cat:'',source:''});renderTipEdit();
+  let rows=document.querySelectorAll('#tipedit .trow'),last=rows[rows.length-1];
+  if(last){last.scrollIntoView({block:'nearest'});last.querySelector('.ti-body').focus();}}
+function tipDel(i){TIPS=tipRead();TIPS.splice(i,1);renderTipEdit();}
+async function saveTips(){
+  if(!SUPER){alert('先在上面填管理密码点验证');return;}
+  let items=tipRead().filter(x=>x.body);
+  let r=await api('/api/tips',{},{super_password:SUPER,items});
+  if(r&&r.ok){await loadTips();renderTipEdit();alert('已保存 '+items.length+' 条');}
+  else alert((r&&r.error)||'保存失败');
 }
 async function addMember(){
   let n=await uiPrompt('成员名字：'); if(!n||!n.trim())return;
@@ -626,6 +735,11 @@ async function openSettings(){
           <button class="btn gr" onclick="exp('all','json')">本人 JSON</button>
           <button class="btn gr" onclick="exp('allm','json')">全员 JSON</button></div>
         </div>
+        <div class="sec"><div class="st">健身知识（顶栏滚动显示，没设备注的成员才显示）</div>
+          <div id="tipedit" style="max-height:46vh;overflow:auto"></div>
+          <div class="fbtn" style="margin-top:8px"><button class="btn gr" onclick="tipAdd()">＋ 加一条</button>
+          <button class="btn b" onclick="saveTips()">保存知识</button></div>
+        </div>
         <div class="sec"><div class="st">AI 问答（OpenAI 兼容接口）</div>
           <div class="row"><input type="text" id="ai-base" placeholder="接口地址，如 https://api.deepseek.com/v1" value="${esc(ai.base||'')}" style="flex:1;min-width:0"></div>
           <div class="row" style="margin-top:8px"><input type="text" id="ai-key" placeholder="${ai.has_key?'API Key（已保存，留空不改）':'API Key'}" style="flex:1;min-width:0"></div>
@@ -643,13 +757,13 @@ async function openSettings(){
         </div>
       </div>
     </div></div></div>`;
-  if(SUPER){$('lockbox').style.display='none';$('sset').style.display='';}
+  if(SUPER){$('lockbox').style.display='none';$('sset').style.display='';renderTipEdit();}
 }
 function closeSettings(){$('modal').innerHTML='';}
 function unlockSettings(){
   let v=$('sp').value; if(!v){alert('先填管理密码');return;}
   api('/api/settings/passwords',{},{super_password:v}).then(r=>{
-    if(r&&r.ok){SUPER=v;$('lockbox').style.display='none';$('sset').style.display='';}
+    if(r&&r.ok){SUPER=v;$('lockbox').style.display='none';$('sset').style.display='';renderTipEdit();}
     else if(r)alert(r.error);
   });
 }
@@ -1909,6 +2023,7 @@ async function loadPR(){
 
 // 顶栏: 向下滚动收起 / 向上滚动浮现
 let _lastY=0;
+addEventListener('resize',()=>{ if($('motto'))renderMotto(); });   // 旋转/改窗口后重算居中宽度
 addEventListener('scroll',()=>{
   let bar=document.getElementById('topbar'); if(!bar)return;
   let y=Math.max(0,window.scrollY||document.documentElement.scrollTop||0);
@@ -1919,6 +2034,8 @@ addEventListener('scroll',()=>{
 },{passive:true});
 
 (async function(){
+  await loadTips();
+  TIPI=Math.floor(Math.random()*Math.max(1,TIPS.length));   // 每次刷新/重进随机一条, 之后 5 分钟才换
   await loadMembers();
   let t=localStorage.getItem('js_tab');
   if(t!=='plan'&&t!=='body'&&t!=='chart')t='cal';

@@ -10,6 +10,12 @@ from datetime import date as dtdate, timedelta
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:                                    # 预置健身知识(84 条), 只在首次启动写入
+    from tips_seed import TIPS as TIPS_SEED
+except Exception:
+    TIPS_SEED = []
+
 # 密码优先用环境变量指定; 不指定则首次启动随机生成一个, 打印在启动日志里。
 # 仓库里因此不含任何具体密码。
 PASSWORD = os.environ.get("ACCESS_PASSWORD", "").strip()
@@ -97,6 +103,8 @@ def db():
             PRIMARY KEY(member_id, date));
         CREATE TABLE IF NOT EXISTS skips(member_id INTEGER NOT NULL, date TEXT NOT NULL,
             PRIMARY KEY(member_id, date));
+        CREATE TABLE IF NOT EXISTS tips(id INTEGER PRIMARY KEY AUTOINCREMENT,
+            body TEXT NOT NULL, cat TEXT DEFAULT '', source TEXT DEFAULT '', ord INTEGER DEFAULT 0);
         """)
         try:
             _db.execute("ALTER TABLE days ADD COLUMN plan_idx INTEGER")
@@ -157,6 +165,7 @@ def db():
         _migrate_v3()
         _migrate_v4()
         _migrate_v5()
+        _seed_tips()
         _cleanup_orphans()
         try:                      # 把 WAL 并回主库, 免得 -wal 一直涨(备份 .db 单文件才安全)
             _db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -240,6 +249,28 @@ def _cleanup_orphans():
     except sqlite3.OperationalError:
         pass
     d.commit()
+
+
+def _seed_tips():
+    """预置健身知识: 只在第一次(settings.tips_seeded 未置位且表为空)写入一次。
+    之后用户在设置里改/删/清空都不再回灌。"""
+    try:
+        done = db().execute("SELECT COUNT(*) c FROM settings WHERE k='tips_seeded'").fetchone()["c"]
+        if done or not TIPS_SEED:
+            return
+        if db().execute("SELECT COUNT(*) c FROM tips").fetchone()["c"]:
+            db().execute("INSERT OR REPLACE INTO settings(k,v) VALUES('tips_seeded','1')")
+            db().commit()
+            return
+        with DB_LOCK:
+            for i, it in enumerate(TIPS_SEED):
+                db().execute("INSERT INTO tips(body,cat,source,ord) VALUES(?,?,?,?)",
+                             (str(it.get("body") or ""), str(it.get("cat") or ""),
+                              str(it.get("source") or ""), i))
+            db().execute("INSERT OR REPLACE INTO settings(k,v) VALUES('tips_seeded','1')")
+            db().commit()
+    except sqlite3.Error as e:
+        print(f"  预置知识写入失败: {e}", flush=True)
 
 
 def _migrate_v2():
@@ -1175,6 +1206,10 @@ class Handler(BaseHTTPRequestHandler):
             mid = g("member_id")
             self._ok(items=q("""SELECT id,name,COALESCE(kcal,'') kcal,COALESCE(protein,'') protein
                                 FROM intake_tpl WHERE member_id=? ORDER BY ord,id""", (mid,)))
+            return
+        if path == "/api/tips":
+            self._ok(items=q("""SELECT id,body,cat,COALESCE(source,'') source
+                                FROM tips ORDER BY ord,id"""))
             return
         if path == "/api/ai/config":
             self._ok(base=ai_get("ai_base"), model=ai_get("ai_model"),
@@ -2144,6 +2179,30 @@ class Handler(BaseHTTPRequestHandler):
                                     VALUES(?,?,?,?,?)""", (mid, nm, vals[0], vals[1], i))
                 db().commit()
             self._ok()
+            return
+        if path == "/api/tips":
+            if not check_super(d.get("super_password")):
+                self._err("管理密码不对", 403)
+                return
+            items = d.get("items")
+            if not isinstance(items, list):
+                self._err("参数错误")
+                return
+            rows = []
+            for i, it in enumerate(items[:300]):
+                if not isinstance(it, dict):
+                    continue
+                body = str(it.get("body") or "").strip()[:60]
+                if not body:
+                    continue
+                rows.append((body, str(it.get("cat") or "").strip()[:10],
+                             str(it.get("source") or "").strip()[:160], i))
+            with DB_LOCK:
+                db().execute("DELETE FROM tips")
+                for r in rows:
+                    db().execute("INSERT INTO tips(body,cat,source,ord) VALUES(?,?,?,?)", r)
+                db().commit()
+            self._ok(n=len(rows))
             return
         if path == "/api/body/delete":
             q("DELETE FROM body WHERE member_id=? AND date=?", (d.get("member_id"), d.get("date")), commit=True)
