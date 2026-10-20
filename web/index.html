@@ -550,7 +550,7 @@ $('mem').onchange=e=>{MID=+e.target.value;localStorage.setItem('js_mid',MID);ren
 
 // 顶栏居中文字: 有备注显示备注, 没备注滚健身知识; 点一下展开全文(只读), 弹窗右下角图标进编辑
 let TIPS=[],TIPI=0,TIP_HOLD=false,MOTTO={kind:'none',text:'',cat:'',source:''};
-const TIP_ROTATE_MS=5*60*1000;          // 一条知识显示的时长: 满 5 分钟才换下一条
+const TIP_ROTATE_MS=2*60*1000;          // 一条知识显示的时长: 满 2 分钟才换下一条
 let TIP_ROTATE=null,TIP_HIDDEN_AT=0;
 function scheduleTipRotate(){
   if(TIP_ROTATE){clearTimeout(TIP_ROTATE);TIP_ROTATE=null;}
